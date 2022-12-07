@@ -1,0 +1,17 @@
+[package]
+name = "titan-example"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+readme = "readme.md"
+
+[dependencies]
+titan-hal.workspace = true
+titan-tensor.workspace = true
+titan-runtime.workspace = true
+titan-distributed.workspace = true
+titan-kernel.workspace = true
+titan-graph.workspace = true
+titan-model.workspace = true

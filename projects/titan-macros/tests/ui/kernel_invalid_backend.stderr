@@ -1,0 +1,5 @@
+error: `backend` 必须是 Auto、CpuSimd、Ptx、Hip、Metal 或 Wgsl
+ --> tests/ui/kernel_invalid_backend.rs:3:20
+  |
+3 | #[kernel(backend = Cuda)]
+  |                    ^^^^

@@ -1,11 +1,34 @@
 [workspace]
+resolver = "2"
 members = ["projects/*"]
-default-members = [
-    "projects/waifu-diffuser-types",
-]
+default-members = ["projects/titan-example"]
 exclude = [
     "projects/.DS_Store",
+    "projects/titan-webui",
 ]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Aster <192607617@qq.com>"]
+license = "MPL-2.0"
+
+[workspace.dependencies]
+titan-hal = { path = "projects/titan-hal" }
+titan-tensor = { path = "projects/titan-tensor" }
+titan-autotune = { path = "projects/titan-autotune" }
+titan-runtime = { path = "projects/titan-runtime" }
+titan-distributed = { path = "projects/titan-distributed" }
+titan-profiler = { path = "projects/titan-profiler" }
+titan-kernel = { path = "projects/titan-kernel" }
+titan-graph = { path = "projects/titan-graph" }
+titan-model = { path = "projects/titan-model" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4.5.48", features = ["derive"] }
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "extra-traits"] }
 
 [profile.release]
 lto = true
