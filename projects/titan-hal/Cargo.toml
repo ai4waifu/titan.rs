@@ -8,3 +8,5 @@ description = "Hardware abstraction layer for Titan.rs"
 readme = "readme.md"
 
 [dependencies]
+libloading.workspace = true
+titan-types.workspace = true

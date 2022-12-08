@@ -75,10 +75,18 @@ impl LocalTransport {
         if timeout.is_zero() || self.timeout.is_zero() {
             return Err(CollectiveError::Timeout);
         }
-        if frame.run_id != self.run_id { return Err(CollectiveError::RunMismatch); }
-        if frame.epoch != self.epoch { return Err(CollectiveError::EpochMismatch); }
-        if frame.sequence != self.next_sequence { return Err(CollectiveError::SequenceMismatch); }
-        if checksum(&frame.payload) != frame.checksum { return Err(CollectiveError::ChecksumMismatch); }
+        if frame.run_id != self.run_id {
+            return Err(CollectiveError::RunMismatch);
+        }
+        if frame.epoch != self.epoch {
+            return Err(CollectiveError::EpochMismatch);
+        }
+        if frame.sequence != self.next_sequence {
+            return Err(CollectiveError::SequenceMismatch);
+        }
+        if checksum(&frame.payload) != frame.checksum {
+            return Err(CollectiveError::ChecksumMismatch);
+        }
         self.next_sequence = self.next_sequence.checked_add(1).ok_or(CollectiveError::SequenceMismatch)?;
         Ok(frame.payload.clone())
     }
@@ -151,8 +159,12 @@ impl CheckpointManifest {
     /// Validates all identity and integrity fields before restoring state.
     pub fn validate_recovery(&self, run_id: &str, step: usize, payload: &[u8]) -> Result<(), CollectiveError> {
         self.validate()?;
-        if self.run_id != run_id || self.step != step { return Err(CollectiveError::InvalidManifest); }
-        if self.checksum != checksum(payload) { return Err(CollectiveError::ChecksumMismatch); }
+        if self.run_id != run_id || self.step != step {
+            return Err(CollectiveError::InvalidManifest);
+        }
+        if self.checksum != checksum(payload) {
+            return Err(CollectiveError::ChecksumMismatch);
+        }
         Ok(())
     }
 }

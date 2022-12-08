@@ -1,53 +1,94 @@
 #![warn(missing_docs)]
 //! Compile-time-friendly graph representations and a lightweight executor.
 
-use std::thread::{self, JoinHandle};
+use std::collections::BTreeMap;
+use titan_tensor::TensorHandle;
+use titan_types::{AliasContract, AttrMap, DType, Layout, MemoryEffect, OperatorId, Shape, SourceSpan, Strides};
 
-/// Operations represented in a Titan compute graph.
+/// Backend-independent operator request.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Op {
-    Multiply,
-    Add,
-    FusedMultiplyAdd,
-    Dead,
+pub struct OpRequest {
+    /// Typed operator identity used by runtime dispatch.
+    pub operator: OperatorId,
+    /// Runtime tensor inputs.
+    pub inputs: Vec<TensorHandle>,
+    /// Output allocation specifications.
+    pub outputs: Vec<TensorSpec>,
+    /// Canonical attributes.
+    pub attrs: AttrMap,
+    /// Memory and alias effects.
+    pub effects: EffectContract,
+    /// Diagnostic source location.
+    pub source: SourceSpan,
 }
 
-/// An ordered command buffer that can be optimized before submission.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct CommandBuffer {
-    operations: Vec<Op>,
+/// Stable graph value identity.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ValueId(pub u32);
+/// Stable graph node identity.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct NodeId(pub u32);
+/// Tensor metadata carried by typed graph values.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct TensorSpec {
+    pub dtype: DType,
+    pub shape: Shape,
+    pub strides: Strides,
+    pub layout: Layout,
+    pub alias: AliasContract,
 }
-impl CommandBuffer {
-    /// Creates an empty command buffer.
+/// Node memory/effect contract.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct EffectContract {
+    pub memory: MemoryEffect,
+    pub deterministic: bool,
+}
+/// Typed graph node.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GraphNode {
+    pub id: NodeId,
+    pub operator: OperatorId,
+    pub inputs: Vec<ValueId>,
+    pub outputs: Vec<ValueId>,
+    pub attrs: AttrMap,
+    pub effects: EffectContract,
+    pub source: SourceSpan,
+}
+/// Typed graph IR.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Graph {
+    pub values: BTreeMap<ValueId, TensorSpec>,
+    pub nodes: Vec<GraphNode>,
+    pub outputs: Vec<ValueId>,
+}
+impl Graph {
+    /// Creates an empty typed graph.
     pub fn new() -> Self {
         Self::default()
     }
-    /// Appends an operation.
-    pub fn push(&mut self, operation: Op) {
-        self.operations.push(operation);
-    }
-    /// Returns optimized operations, fusing multiply followed by add and removing dead code.
-    pub fn optimize(&self) -> Vec<Op> {
-        let mut output = Vec::new();
-        let mut i = 0;
-        while i < self.operations.len() {
-            match (&self.operations[i], self.operations.get(i + 1)) {
-                (Op::Multiply, Some(Op::Add)) => {
-                    output.push(Op::FusedMultiplyAdd);
-                    i += 2;
-                }
-                (Op::Dead, _) => i += 1,
-                (op, _) => {
-                    output.push(op.clone());
-                    i += 1;
-                }
-            }
+    /// Registers a value specification.
+    pub fn add_value(&mut self, id: ValueId, spec: TensorSpec) -> Result<(), GraphError> {
+        if self.values.insert(id, spec).is_some() {
+            return Err(GraphError::DuplicateValue(id));
         }
-        output
+        Ok(())
     }
-    /// Submits work on a dedicated thread, mirroring asynchronous device execution.
-    pub fn submit<T: Send + 'static>(&self, work: impl FnOnce(Vec<Op>) -> T + Send + 'static) -> JoinHandle<T> {
-        let optimized = self.optimize();
-        thread::spawn(move || work(optimized))
+    /// Appends a node after checking all references exist.
+    pub fn add_node(&mut self, node: GraphNode) -> Result<(), GraphError> {
+        if node.inputs.iter().chain(&node.outputs).any(|id| !self.values.contains_key(id)) {
+            return Err(GraphError::UnknownValue);
+        }
+        self.nodes.push(node);
+        Ok(())
     }
+    /// Returns a deterministic structural hash input.
+    pub fn semantic_key(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+/// Graph construction failure.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum GraphError {
+    DuplicateValue(ValueId),
+    UnknownValue,
 }

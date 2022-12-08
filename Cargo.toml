@@ -9,7 +9,7 @@ exclude = [
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["Aster <192607617@qq.com>"]
 license = "MPL-2.0"
 
@@ -22,14 +22,23 @@ titan-distributed = { path = "projects/titan-distributed" }
 titan-profiler = { path = "projects/titan-profiler" }
 titan-kernel = { path = "projects/titan-kernel" }
 titan-graph = { path = "projects/titan-graph" }
+titan-schema = { path = "projects/titan-schema" }
 titan-model = { path = "projects/titan-model" }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+titan-backend-cpu = { path = "projects/titan-backend-cpu" }
+titan-backend-cuda = { path = "projects/titan-backend-cuda" }
+titan-backend-rocm = { path = "projects/titan-backend-rocm" }
+titan-types = { path = "projects/titan-types" }
+libloading = "0.8"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 clap = { version = "4.5.48", features = ["derive"] }
-proc-macro2 = "1"
-quote = "1"
-syn = { version = "2", features = ["full", "extra-traits"] }
+proc-macro2 = "1.0.107"
+quote = "1.0.47"
+syn = { version = "3.0.3", features = ["full", "extra-traits"] }
 
 [profile.release]
+opt-level = 3
+codegen-units = 1
 lto = true
+strip = "symbols"
 panic = "abort"

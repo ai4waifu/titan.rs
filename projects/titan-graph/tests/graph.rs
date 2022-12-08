@@ -1,9 +1,20 @@
-use titan_graph::{CommandBuffer, Op};
+use titan_graph::{Graph, TensorSpec, ValueId};
+use titan_types::{AliasContract, DType, Layout, Shape, Strides};
+
 #[test]
-fn fuses_and_submits() {
-    let mut graph = CommandBuffer::new();
-    graph.push(Op::Multiply);
-    graph.push(Op::Add);
-    graph.push(Op::Dead);
-    assert_eq!(graph.submit(|ops| ops).join().unwrap(), vec![Op::FusedMultiplyAdd]);
+fn typed_graph_registers_values() {
+    let mut graph = Graph::new();
+    graph
+        .add_value(
+            ValueId(0),
+            TensorSpec {
+                dtype: DType::F32,
+                shape: Shape(vec![2, 2]),
+                strides: Strides(vec![2, 1]),
+                layout: Layout::Contiguous,
+                alias: AliasContract::NoAlias,
+            },
+        )
+        .unwrap();
+    assert!(graph.values.contains_key(&ValueId(0)));
 }

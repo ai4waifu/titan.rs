@@ -2,7 +2,6 @@
 //! User-facing model definitions and portable deployment metadata.
 
 use serde::{Deserialize, Serialize};
-use titan_hal::Backend;
 use titan_runtime::Runtime;
 use titan_tensor::{Tensor, TensorError};
 
@@ -10,8 +9,8 @@ use titan_tensor::{Tensor, TensorError};
 pub const API_SCHEMA_VERSION: u32 = 1;
 
 /// A model that accepts and returns a rank-two f32 tensor on one backend.
-pub trait Module<B: Backend> {
-    fn forward(&self, input: &Tensor<B, f32, 2>, runtime: &mut Runtime, backend: B) -> Result<Tensor<B, f32, 2>, TensorError>;
+pub trait Module {
+    fn forward(&self, input: &Tensor<f32, 2>, runtime: &mut Runtime) -> Result<Tensor<f32, 2>, TensorError>;
 }
 
 /// Stable identifier for a model family (for example `language.transformer`).
@@ -101,22 +100,6 @@ impl ModelRegistry {
 pub enum ModelError {
     Duplicate(String, String),
     InvalidManifest(String),
-}
-
-/// A linear layer whose dimensions are encoded in its type.
-pub struct Linear<const INPUT: usize, const OUTPUT: usize, B: Backend> {
-    weights: Tensor<B, f32, 2>,
-}
-impl<const INPUT: usize, const OUTPUT: usize, B: Backend> Linear<INPUT, OUTPUT, B> {
-    /// Creates a linear layer from exactly INPUT * OUTPUT weights.
-    pub fn from_weights(backend: B, weights: Vec<f32>) -> Result<Self, TensorError> {
-        Ok(Self { weights: Tensor::from_vec(backend, [INPUT, OUTPUT], weights)? })
-    }
-}
-impl<const INPUT: usize, const OUTPUT: usize, B: Backend> Module<B> for Linear<INPUT, OUTPUT, B> {
-    fn forward(&self, input: &Tensor<B, f32, 2>, runtime: &mut Runtime, backend: B) -> Result<Tensor<B, f32, 2>, TensorError> {
-        runtime.matmul(input, &self.weights, backend)
-    }
 }
 
 /// Runtime targets supported by the single-binary deployment contract.
