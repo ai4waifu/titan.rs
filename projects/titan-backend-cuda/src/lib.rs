@@ -322,6 +322,21 @@ pub fn gelu_f32_abi() -> KernelAbi {
     }
 }
 
+/// Fixed ABI for contiguous F32 QuickGELU with a runtime-provided slope.
+pub fn quick_gelu_f32_abi() -> KernelAbi {
+    KernelAbi {
+        version: 1,
+        args: vec![
+            AbiArg::Buffer { dtype: titan_types::DType::F32, writable: false, alignment: 4 },
+            AbiArg::Buffer { dtype: titan_types::DType::F32, writable: true, alignment: 4 },
+            AbiArg::Scalar { dtype: titan_types::DType::I32 },
+            AbiArg::Scalar { dtype: titan_types::DType::F32 },
+        ],
+        launch: titan_kernel::LaunchConfig { block_size: 128, vector_width: 1, pipeline_depth: 1 },
+        workspace_bytes: 0,
+    }
+}
+
 /// Fixed ABI for contiguous F32 softmax over the final logical axis.
 pub fn softmax_f32_abi() -> KernelAbi {
     KernelAbi {
