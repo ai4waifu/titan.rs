@@ -1,4 +1,4 @@
-use titan_backend_cuda::{CudaCompiler, elementwise_add_f32_abi};
+use titan_backend_cuda::{CudaCompiler, elementwise_add_f32_abi, gemm_f32_abi, silu_f32_abi};
 use titan_kernel::{AddressSpace, BasicBlock, BlockId, Instruction, IrType, KernelAbi, KernelError, KernelModule, TargetCompiler, ValueId};
 use titan_types::{BackendId, DType, DeviceFingerprint, DeviceId, KernelId};
 
@@ -60,6 +60,32 @@ fn direct_compiler_lowers_add_ir_to_nul_terminated_typed_ptx() {
     assert!(source.contains(".target sm_86"));
     assert!(source.contains(".entry titan_elementwise_add_f32"));
     assert!(source.contains("add.rn.f32"));
+}
+
+fn empty_macro_ir(kernel_id: &str, abi: KernelAbi) -> KernelModule {
+    KernelModule {
+        kernel_id: KernelId(kernel_id.into()),
+        entry: BlockId(0),
+        blocks: vec![BasicBlock { id: BlockId(0), params: vec![], instructions: vec![] }],
+        abi,
+    }
+}
+
+#[test]
+fn silu_and_gemm_emit_atomic_ptx_lines_not_single_macro() {
+    let silu_abi = silu_f32_abi();
+    let silu = CudaCompiler.compile(&empty_macro_ir("silu.f32", silu_abi.clone()), &silu_abi, &fingerprint("sm_86")).unwrap();
+    let silu_source = std::str::from_utf8(&silu[..silu.len() - 1]).unwrap();
+    assert!(silu_source.contains("ex2.approx.f32"));
+    assert!(silu_source.contains("div.rn.f32"));
+    assert!(silu_source.matches(";\n").count() > 10, "silu should stringify many atomic instructions");
+
+    let gemm_abi = gemm_f32_abi();
+    let gemm = CudaCompiler.compile(&empty_macro_ir("gemm.f32", gemm_abi.clone()), &gemm_abi, &fingerprint("sm_86")).unwrap();
+    let gemm_source = std::str::from_utf8(&gemm[..gemm.len() - 1]).unwrap();
+    assert!(gemm_source.contains("fma.rn.f32"));
+    assert!(gemm_source.contains("mad.lo.u32"));
+    assert!(gemm_source.matches(";\n").count() > 20, "gemm should stringify many atomic instructions");
 }
 
 #[test]
