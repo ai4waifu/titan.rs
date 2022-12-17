@@ -1,8 +1,11 @@
 use std::num::NonZeroU8;
 
-use super::super::ast::{
-    ElementwiseOperation, Entry, Identifier, Label, Parameter, ParameterIndex, ParameterKind,
-    PtxInstruction, Register, RegisterClass, RegisterDeclaration, U32Value,
+use super::{
+    super::ast::{
+        ElementwiseOperation, Entry, Identifier, Label, Parameter, ParameterIndex, ParameterKind, PtxInstruction,
+        RegisterClass, RegisterDeclaration, U32Value,
+    },
+    regs::{b32, b64, f32, predicate},
 };
 
 pub(super) fn elementwise_f32(name: Identifier, operation: ElementwiseOperation) -> Entry {
@@ -18,10 +21,6 @@ pub(super) fn elementwise_f32(name: Identifier, operation: ElementwiseOperation)
         Parameter { name: parameter_names[2].clone(), kind: ParameterKind::GlobalF32Pointer },
         Parameter { name: parameter_names[3].clone(), kind: ParameterKind::U32 },
     ];
-    let predicate = |index| Register::new(RegisterClass::Predicate, index);
-    let b32 = |index| Register::new(RegisterClass::B32, index);
-    let b64 = |index| Register::new(RegisterClass::B64, index);
-    let f32 = |index| Register::new(RegisterClass::F32, index);
     let done = Label(name.suffix("_done"));
     Entry {
         name,

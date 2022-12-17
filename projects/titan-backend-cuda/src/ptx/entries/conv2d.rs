@@ -1,44 +1,43 @@
 use std::num::NonZeroU8;
 
-use super::super::ast::{
-    Entry, F32Value, Identifier, Label, Parameter, ParameterIndex, ParameterKind, PtxInstruction,
-    Register, RegisterClass, RegisterDeclaration, U32Value,
+use super::{
+    super::ast::{
+        Entry, F32Value, Identifier, Label, Parameter, ParameterIndex, ParameterKind, PtxInstruction, RegisterClass,
+        RegisterDeclaration, U32Value,
+    },
+    regs::{b32, b64, f32, predicate},
 };
 
 pub(super) fn conv2d_f32(name: Identifier) -> Entry {
-        let parameter_names: [Identifier; 21] = std::array::from_fn(|index| name.parameter(ParameterIndex(index as u8)));
-        let parameters = parameter_names
-            .iter()
-            .enumerate()
-            .map(|(index, parameter)| Parameter {
-                name: parameter.clone(),
-                kind: if index < 4 { ParameterKind::GlobalF32Pointer } else { ParameterKind::U32 },
-            })
-            .collect();
+    let parameter_names: [Identifier; 21] = std::array::from_fn(|index| name.parameter(ParameterIndex(index as u8)));
+    let parameters = parameter_names
+        .iter()
+        .enumerate()
+        .map(|(index, parameter)| Parameter {
+            name: parameter.clone(),
+            kind: if index < 4 { ParameterKind::GlobalF32Pointer } else { ParameterKind::U32 },
+        })
+        .collect();
 
-    let predicate = |index| Register::new(RegisterClass::Predicate, index);
-    let b32 = |index| Register::new(RegisterClass::B32, index);
-    let b64 = |index| Register::new(RegisterClass::B64, index);
-    let f32 = |index| Register::new(RegisterClass::F32, index);
-        let done = Label(name.suffix("_done"));
-        let no_bias = Label(name.suffix("_no_bias"));
-        let input_channel_loop = Label(name.suffix("_input_channel_loop"));
-        let kernel_h_loop = Label(name.suffix("_kernel_h_loop"));
-        let kernel_w_loop = Label(name.suffix("_kernel_w_loop"));
-        let next_kernel_w = Label(name.suffix("_next_kernel_w"));
-        let kernel_w_done = Label(name.suffix("_kernel_w_done"));
-        let kernel_h_done = Label(name.suffix("_kernel_h_done"));
-        let input_channel_done = Label(name.suffix("_input_channel_done"));
-        Entry {
-            name,
-            parameters,
-            registers: vec![
+    let done = Label(name.suffix("_done"));
+    let no_bias = Label(name.suffix("_no_bias"));
+    let input_channel_loop = Label(name.suffix("_input_channel_loop"));
+    let kernel_h_loop = Label(name.suffix("_kernel_h_loop"));
+    let kernel_w_loop = Label(name.suffix("_kernel_w_loop"));
+    let next_kernel_w = Label(name.suffix("_next_kernel_w"));
+    let kernel_w_done = Label(name.suffix("_kernel_w_done"));
+    let kernel_h_done = Label(name.suffix("_kernel_h_done"));
+    let input_channel_done = Label(name.suffix("_input_channel_done"));
+    Entry {
+        name,
+        parameters,
+        registers: vec![
             RegisterDeclaration { class: RegisterClass::Predicate, count: NonZeroU8::new(3).unwrap() },
             RegisterDeclaration { class: RegisterClass::B32, count: NonZeroU8::new(38).unwrap() },
             RegisterDeclaration { class: RegisterClass::B64, count: NonZeroU8::new(9).unwrap() },
             RegisterDeclaration { class: RegisterClass::F32, count: NonZeroU8::new(4).unwrap() },
         ],
-            instructions: vec![
+        instructions: vec![
             PtxInstruction::LoadParameterU64 { destination: b64(1), parameter: parameter_names[0].clone() },
             PtxInstruction::LoadParameterU64 { destination: b64(2), parameter: parameter_names[1].clone() },
             PtxInstruction::LoadParameterU64 { destination: b64(3), parameter: parameter_names[2].clone() },
@@ -125,7 +124,12 @@ pub(super) fn conv2d_f32(name: Identifier) -> Entry {
             PtxInstruction::AddS64 { destination: b64(8), left: b64(2), right: b64(6) },
             PtxInstruction::LoadGlobalF32 { destination: f32(2), pointer: b64(7) },
             PtxInstruction::LoadGlobalF32 { destination: f32(3), pointer: b64(8) },
-            PtxInstruction::FmaRnF32 { destination: f32(1), a: F32Value::Reg(f32(2)), b: F32Value::Reg(f32(3)), c: F32Value::Reg(f32(1)) },
+            PtxInstruction::FmaRnF32 {
+                destination: f32(1),
+                a: F32Value::Reg(f32(2)),
+                b: F32Value::Reg(f32(3)),
+                c: F32Value::Reg(f32(1)),
+            },
             PtxInstruction::DefineLabel(next_kernel_w.clone()),
             PtxInstruction::AddU32 { destination: b32(32), left: b32(32), right: U32Value::Imm(1) },
             PtxInstruction::Branch { target: kernel_w_loop.clone() },
@@ -142,5 +146,5 @@ pub(super) fn conv2d_f32(name: Identifier) -> Entry {
             PtxInstruction::DefineLabel(done.clone()),
             PtxInstruction::Return,
         ],
-        }
+    }
 }
