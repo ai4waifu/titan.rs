@@ -5,7 +5,8 @@ use super::{
         Entry, Identifier, Label, Parameter, ParameterIndex, ParameterKind, PtxInstruction, RegisterClass, RegisterDeclaration,
         U32Value,
     },
-    regs::{b32, b64, f32, predicate},
+    prologue::linear_index_guard,
+    regs::{b32, b64, f32},
 };
 
 pub(super) fn slice_f32(name: Identifier) -> Entry {
@@ -20,6 +21,25 @@ pub(super) fn slice_f32(name: Identifier) -> Entry {
         .collect();
 
     let done = Label(name.suffix("_done"));
+    let mut instructions = vec![
+        PtxInstruction::LoadParameterU64 { destination: b64(1), parameter: parameter_names[0].clone() },
+        PtxInstruction::LoadParameterU64 { destination: b64(2), parameter: parameter_names[1].clone() },
+        PtxInstruction::LoadParameterU32 { destination: b32(1), parameter: parameter_names[2].clone() },
+        PtxInstruction::LoadParameterU32 { destination: b32(2), parameter: parameter_names[3].clone() },
+        PtxInstruction::LoadParameterU32 { destination: b32(3), parameter: parameter_names[4].clone() },
+    ];
+    instructions.extend(linear_index_guard(4, 5, 6, 7, U32Value::Reg(b32(3)), 1, &done, true));
+    instructions.extend([
+        PtxInstruction::MadLoU32 { destination: b32(8), left: b32(7), right: b32(2), addend: b32(1) },
+        PtxInstruction::MultiplyWideU32 { destination: b64(3), left: b32(8), right: 4 },
+        PtxInstruction::AddS64 { destination: b64(4), left: b64(1), right: b64(3) },
+        PtxInstruction::LoadGlobalF32 { destination: f32(1), pointer: b64(4) },
+        PtxInstruction::MultiplyWideU32 { destination: b64(5), left: b32(7), right: 4 },
+        PtxInstruction::AddS64 { destination: b64(6), left: b64(2), right: b64(5) },
+        PtxInstruction::StoreGlobalF32 { pointer: b64(6), value: f32(1) },
+        PtxInstruction::DefineLabel(done),
+        PtxInstruction::Return,
+    ]);
     Entry {
         name,
         parameters,
@@ -29,27 +49,6 @@ pub(super) fn slice_f32(name: Identifier) -> Entry {
             RegisterDeclaration { class: RegisterClass::B64, count: NonZeroU8::new(7).unwrap() },
             RegisterDeclaration { class: RegisterClass::F32, count: NonZeroU8::new(2).unwrap() },
         ],
-        instructions: vec![
-            PtxInstruction::LoadParameterU64 { destination: b64(1), parameter: parameter_names[0].clone() },
-            PtxInstruction::LoadParameterU64 { destination: b64(2), parameter: parameter_names[1].clone() },
-            PtxInstruction::LoadParameterU32 { destination: b32(1), parameter: parameter_names[2].clone() },
-            PtxInstruction::LoadParameterU32 { destination: b32(2), parameter: parameter_names[3].clone() },
-            PtxInstruction::LoadParameterU32 { destination: b32(3), parameter: parameter_names[4].clone() },
-            PtxInstruction::MoveCtaIdX { destination: b32(4) },
-            PtxInstruction::MoveNtidX { destination: b32(5) },
-            PtxInstruction::MoveTidX { destination: b32(6) },
-            PtxInstruction::MultiplyAddLoS32 { destination: b32(7), left: b32(4), right: b32(5), addend: b32(6) },
-            PtxInstruction::SetPredicateGeU32 { destination: predicate(1), left: b32(7), right: U32Value::Reg(b32(3)) },
-            PtxInstruction::BranchIf { predicate: predicate(1), target: done.clone() },
-            PtxInstruction::MadLoU32 { destination: b32(8), left: b32(7), right: b32(2), addend: b32(1) },
-            PtxInstruction::MultiplyWideU32 { destination: b64(3), left: b32(8), right: 4 },
-            PtxInstruction::AddS64 { destination: b64(4), left: b64(1), right: b64(3) },
-            PtxInstruction::LoadGlobalF32 { destination: f32(1), pointer: b64(4) },
-            PtxInstruction::MultiplyWideU32 { destination: b64(5), left: b32(7), right: 4 },
-            PtxInstruction::AddS64 { destination: b64(6), left: b64(2), right: b64(5) },
-            PtxInstruction::StoreGlobalF32 { pointer: b64(6), value: f32(1) },
-            PtxInstruction::DefineLabel(done.clone()),
-            PtxInstruction::Return,
-        ],
+        instructions,
     }
 }

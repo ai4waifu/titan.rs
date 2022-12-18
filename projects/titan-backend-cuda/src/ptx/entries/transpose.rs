@@ -5,7 +5,8 @@ use super::{
         Entry, Identifier, Label, Parameter, ParameterIndex, ParameterKind, PtxInstruction, RegisterClass, RegisterDeclaration,
         U32Value,
     },
-    regs::{b32, b64, f32, predicate},
+    prologue::{bounds_guard, linear_tid},
+    regs::{b32, b64, f32},
 };
 
 pub(super) fn transpose_f32(name: Identifier) -> Entry {
@@ -20,6 +21,29 @@ pub(super) fn transpose_f32(name: Identifier) -> Entry {
         .collect();
 
     let done = Label(name.suffix("_done"));
+    let mut instructions = vec![
+        PtxInstruction::LoadParameterU64 { destination: b64(1), parameter: parameter_names[0].clone() },
+        PtxInstruction::LoadParameterU64 { destination: b64(2), parameter: parameter_names[1].clone() },
+        PtxInstruction::LoadParameterU32 { destination: b32(1), parameter: parameter_names[2].clone() },
+        PtxInstruction::LoadParameterU32 { destination: b32(2), parameter: parameter_names[3].clone() },
+    ];
+    instructions.extend(linear_tid(3, 4, 5, 6, true));
+    instructions.push(PtxInstruction::MulLoU32 { destination: b32(7), left: b32(1), right: U32Value::Reg(b32(2)) });
+    instructions.extend(bounds_guard(6, U32Value::Reg(b32(7)), 1, &done));
+    instructions.extend([
+        PtxInstruction::DivU32 { destination: b32(8), left: b32(6), right: U32Value::Reg(b32(1)) },
+        PtxInstruction::RemU32 { destination: b32(9), left: b32(6), right: U32Value::Reg(b32(1)) },
+        PtxInstruction::MulLoU32 { destination: b32(10), left: b32(9), right: U32Value::Reg(b32(2)) },
+        PtxInstruction::AddU32 { destination: b32(11), left: b32(10), right: U32Value::Reg(b32(8)) },
+        PtxInstruction::MultiplyWideU32 { destination: b64(3), left: b32(11), right: 4 },
+        PtxInstruction::AddS64 { destination: b64(4), left: b64(1), right: b64(3) },
+        PtxInstruction::LoadGlobalF32 { destination: f32(1), pointer: b64(4) },
+        PtxInstruction::MultiplyWideU32 { destination: b64(5), left: b32(6), right: 4 },
+        PtxInstruction::AddS64 { destination: b64(6), left: b64(2), right: b64(5) },
+        PtxInstruction::StoreGlobalF32 { pointer: b64(6), value: f32(1) },
+        PtxInstruction::DefineLabel(done),
+        PtxInstruction::Return,
+    ]);
     Entry {
         name,
         parameters,
@@ -29,30 +53,6 @@ pub(super) fn transpose_f32(name: Identifier) -> Entry {
             RegisterDeclaration { class: RegisterClass::B64, count: NonZeroU8::new(7).unwrap() },
             RegisterDeclaration { class: RegisterClass::F32, count: NonZeroU8::new(2).unwrap() },
         ],
-        instructions: vec![
-            PtxInstruction::LoadParameterU64 { destination: b64(1), parameter: parameter_names[0].clone() },
-            PtxInstruction::LoadParameterU64 { destination: b64(2), parameter: parameter_names[1].clone() },
-            PtxInstruction::LoadParameterU32 { destination: b32(1), parameter: parameter_names[2].clone() },
-            PtxInstruction::LoadParameterU32 { destination: b32(2), parameter: parameter_names[3].clone() },
-            PtxInstruction::MoveCtaIdX { destination: b32(3) },
-            PtxInstruction::MoveNtidX { destination: b32(4) },
-            PtxInstruction::MoveTidX { destination: b32(5) },
-            PtxInstruction::MultiplyAddLoS32 { destination: b32(6), left: b32(3), right: b32(4), addend: b32(5) },
-            PtxInstruction::MulLoU32 { destination: b32(7), left: b32(1), right: U32Value::Reg(b32(2)) },
-            PtxInstruction::SetPredicateGeU32 { destination: predicate(1), left: b32(6), right: U32Value::Reg(b32(7)) },
-            PtxInstruction::BranchIf { predicate: predicate(1), target: done.clone() },
-            PtxInstruction::DivU32 { destination: b32(8), left: b32(6), right: U32Value::Reg(b32(1)) },
-            PtxInstruction::RemU32 { destination: b32(9), left: b32(6), right: U32Value::Reg(b32(1)) },
-            PtxInstruction::MulLoU32 { destination: b32(10), left: b32(9), right: U32Value::Reg(b32(2)) },
-            PtxInstruction::AddU32 { destination: b32(11), left: b32(10), right: U32Value::Reg(b32(8)) },
-            PtxInstruction::MultiplyWideU32 { destination: b64(3), left: b32(11), right: 4 },
-            PtxInstruction::AddS64 { destination: b64(4), left: b64(1), right: b64(3) },
-            PtxInstruction::LoadGlobalF32 { destination: f32(1), pointer: b64(4) },
-            PtxInstruction::MultiplyWideU32 { destination: b64(5), left: b32(6), right: 4 },
-            PtxInstruction::AddS64 { destination: b64(6), left: b64(2), right: b64(5) },
-            PtxInstruction::StoreGlobalF32 { pointer: b64(6), value: f32(1) },
-            PtxInstruction::DefineLabel(done.clone()),
-            PtxInstruction::Return,
-        ],
+        instructions,
     }
 }

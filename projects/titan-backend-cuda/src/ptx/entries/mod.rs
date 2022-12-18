@@ -11,6 +11,7 @@ mod gelu;
 mod gemm;
 mod group_norm;
 mod layer_norm;
+mod prologue;
 mod quick_gelu;
 mod reduction_sum;
 mod regs;

@@ -5,7 +5,8 @@ use super::{
         Entry, F32Value, Identifier, Label, Parameter, ParameterIndex, ParameterKind, PtxInstruction, RegisterClass,
         RegisterDeclaration, U32Value,
     },
-    regs::{b32, b64, f32, predicate},
+    prologue::linear_index_guard,
+    regs::{b32, b64, f32},
 };
 
 pub(super) fn quick_gelu_f32(name: Identifier) -> Entry {
@@ -28,6 +29,28 @@ pub(super) fn quick_gelu_f32(name: Identifier) -> Entry {
         .collect();
 
     let done = Label(name.suffix("_done"));
+    let mut instructions = vec![
+        PtxInstruction::LoadParameterU64 { destination: b64(1), parameter: parameter_names[0].clone() },
+        PtxInstruction::LoadParameterU64 { destination: b64(2), parameter: parameter_names[1].clone() },
+        PtxInstruction::LoadParameterU32 { destination: b32(1), parameter: parameter_names[2].clone() },
+        PtxInstruction::LoadParameterF32 { destination: f32(2), parameter: parameter_names[3].clone() },
+    ];
+    instructions.extend(linear_index_guard(2, 3, 4, 5, U32Value::Reg(b32(1)), 1, &done, true));
+    instructions.extend([
+        PtxInstruction::MultiplyWideU32 { destination: b64(3), left: b32(5), right: 4 },
+        PtxInstruction::AddS64 { destination: b64(4), left: b64(1), right: b64(3) },
+        PtxInstruction::AddS64 { destination: b64(5), left: b64(2), right: b64(3) },
+        PtxInstruction::LoadGlobalF32 { destination: f32(1), pointer: b64(4) },
+        PtxInstruction::MulRnF32 { destination: f32(3), left: F32Value::Reg(f32(1)), right: F32Value::Reg(f32(2)) },
+        PtxInstruction::SubRnF32 { destination: f32(3), left: F32Value::ImmBits(0x00000000), right: F32Value::Reg(f32(3)) },
+        PtxInstruction::MulRnF32 { destination: f32(3), left: F32Value::Reg(f32(3)), right: F32Value::ImmBits(0x3FB8AA3B) },
+        PtxInstruction::Ex2ApproxF32 { destination: f32(3), source: F32Value::Reg(f32(3)) },
+        PtxInstruction::AddRnF32 { destination: f32(3), left: F32Value::Reg(f32(3)), right: F32Value::ImmBits(0x3F800000) },
+        PtxInstruction::DivRnF32 { destination: f32(3), left: F32Value::Reg(f32(1)), right: F32Value::Reg(f32(3)) },
+        PtxInstruction::StoreGlobalF32 { pointer: b64(5), value: f32(3) },
+        PtxInstruction::DefineLabel(done),
+        PtxInstruction::Return,
+    ]);
     Entry {
         name,
         parameters,
@@ -37,30 +60,6 @@ pub(super) fn quick_gelu_f32(name: Identifier) -> Entry {
             RegisterDeclaration { class: RegisterClass::B64, count: NonZeroU8::new(6).unwrap() },
             RegisterDeclaration { class: RegisterClass::F32, count: NonZeroU8::new(4).unwrap() },
         ],
-        instructions: vec![
-            PtxInstruction::LoadParameterU64 { destination: b64(1), parameter: parameter_names[0].clone() },
-            PtxInstruction::LoadParameterU64 { destination: b64(2), parameter: parameter_names[1].clone() },
-            PtxInstruction::LoadParameterU32 { destination: b32(1), parameter: parameter_names[2].clone() },
-            PtxInstruction::LoadParameterF32 { destination: f32(2), parameter: parameter_names[3].clone() },
-            PtxInstruction::MoveCtaIdX { destination: b32(2) },
-            PtxInstruction::MoveNtidX { destination: b32(3) },
-            PtxInstruction::MoveTidX { destination: b32(4) },
-            PtxInstruction::MultiplyAddLoS32 { destination: b32(5), left: b32(2), right: b32(3), addend: b32(4) },
-            PtxInstruction::SetPredicateGeU32 { destination: predicate(1), left: b32(5), right: U32Value::Reg(b32(1)) },
-            PtxInstruction::BranchIf { predicate: predicate(1), target: done.clone() },
-            PtxInstruction::MultiplyWideU32 { destination: b64(3), left: b32(5), right: 4 },
-            PtxInstruction::AddS64 { destination: b64(4), left: b64(1), right: b64(3) },
-            PtxInstruction::AddS64 { destination: b64(5), left: b64(2), right: b64(3) },
-            PtxInstruction::LoadGlobalF32 { destination: f32(1), pointer: b64(4) },
-            PtxInstruction::MulRnF32 { destination: f32(3), left: F32Value::Reg(f32(1)), right: F32Value::Reg(f32(2)) },
-            PtxInstruction::SubRnF32 { destination: f32(3), left: F32Value::ImmBits(0x00000000), right: F32Value::Reg(f32(3)) },
-            PtxInstruction::MulRnF32 { destination: f32(3), left: F32Value::Reg(f32(3)), right: F32Value::ImmBits(0x3FB8AA3B) },
-            PtxInstruction::Ex2ApproxF32 { destination: f32(3), source: F32Value::Reg(f32(3)) },
-            PtxInstruction::AddRnF32 { destination: f32(3), left: F32Value::Reg(f32(3)), right: F32Value::ImmBits(0x3F800000) },
-            PtxInstruction::DivRnF32 { destination: f32(3), left: F32Value::Reg(f32(1)), right: F32Value::Reg(f32(3)) },
-            PtxInstruction::StoreGlobalF32 { pointer: b64(5), value: f32(3) },
-            PtxInstruction::DefineLabel(done.clone()),
-            PtxInstruction::Return,
-        ],
+        instructions,
     }
 }
