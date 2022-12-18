@@ -107,10 +107,7 @@ pub(super) fn validate_broadcast_add_abi(ir: &KernelModule, abi: &KernelAbi) -> 
 }
 
 pub(super) fn validate_broadcast_add_ir(ir: &KernelModule) -> Result<(), KernelError> {
-    require_empty_entry_block(
-        ir,
-        "CUDA broadcast add lowering requires the canonical empty broadcast.add.f32 IR entry block",
-    )
+    require_empty_entry_block(ir, "CUDA broadcast add lowering requires the canonical empty broadcast.add.f32 IR entry block")
 }
 
 pub(super) fn validate_silu_abi(ir: &KernelModule, abi: &KernelAbi) -> Result<(), KernelError> {
