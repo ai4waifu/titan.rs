@@ -1,14 +1,14 @@
 use super::{
     super::ast::{Entry, F32Value, Identifier, Label, PtxInstruction, U32Value},
     params::{ParamLoad, buffer_u32_params, load_params, named_params, regs},
-    prologue::{bounds_guard, linear_tid},
+    prologue::{bounds_guard, done_label, entry_tail, linear_tid},
     regs::{b32, b64, f32, predicate},
 };
 
 pub(super) fn conv2d_f32(name: Identifier) -> Entry {
     let names = named_params::<21>(&name);
     let parameters = buffer_u32_params(&names, 4);
-    let done = Label(name.suffix("_done"));
+    let done = done_label(&name);
     let no_bias = Label(name.suffix("_no_bias"));
     let input_channel_loop = Label(name.suffix("_input_channel_loop"));
     let kernel_h_loop = Label(name.suffix("_kernel_h_loop"));
@@ -126,8 +126,7 @@ pub(super) fn conv2d_f32(name: Identifier) -> Entry {
         PtxInstruction::MultiplyWideU32 { destination: b64(5), left: b32(18), right: 4 },
         PtxInstruction::AddS64 { destination: b64(6), left: b64(4), right: b64(5) },
         PtxInstruction::StoreGlobalF32 { pointer: b64(6), value: f32(1) },
-        PtxInstruction::DefineLabel(done.clone()),
-        PtxInstruction::Return,
     ]);
+    instructions.extend(entry_tail(&done));
     Entry { name, parameters, registers: regs(3, 38, 9, 4), instructions }
 }

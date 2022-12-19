@@ -1,7 +1,7 @@
 use super::{
     super::ast::{Entry, F32Value, Identifier, Label, ParameterKind, PtxInstruction, U32Value},
     params::{ParamLoad, declare_params, load_params, named_params, regs},
-    prologue::{bounds_guard, linear_tid},
+    prologue::{bounds_guard, done_label, entry_tail, linear_tid},
     regs::{b32, b64, f32, predicate},
 };
 
@@ -24,7 +24,7 @@ pub(super) fn group_norm_f32(name: Identifier) -> Entry {
             ParameterKind::U32,
         ],
     );
-    let done = Label(name.suffix("_done"));
+    let done = done_label(&name);
     let mean_loop = Label(name.suffix("_mean_loop"));
     let mean_done = Label(name.suffix("_mean_done"));
     let var_loop = Label(name.suffix("_var_loop"));
@@ -122,8 +122,7 @@ pub(super) fn group_norm_f32(name: Identifier) -> Entry {
         PtxInstruction::StoreGlobalF32 { pointer: b64(7), value: f32(5) },
         PtxInstruction::AddU32 { destination: b32(19), left: b32(19), right: U32Value::Imm(1) },
         PtxInstruction::Branch { target: store_loop.clone() },
-        PtxInstruction::DefineLabel(done.clone()),
-        PtxInstruction::Return,
     ]);
+    instructions.extend(entry_tail(&done));
     Entry { name, parameters, registers: regs(4, 22, 10, 8), instructions }
 }

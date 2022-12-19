@@ -1,14 +1,14 @@
 use super::{
     super::ast::{Entry, F32Value, Identifier, Label, PtxInstruction, U32Value},
     params::{ParamLoad, buffer_u32_params, load_params, named_params, regs},
-    prologue::linear_index_guard,
+    prologue::{done_label, entry_tail, linear_f32_ptrs, linear_index_guard},
     regs::{b32, b64, f32, predicate},
 };
 
 pub(super) fn reduction_sum_f32(name: Identifier) -> Entry {
     let names = named_params::<4>(&name);
     let parameters = buffer_u32_params(&names, 2);
-    let done = Label(name.suffix("_done"));
+    let done = done_label(&name);
     let done_store = Label(name.suffix("_done_store"));
     let loop_label = Label(name.suffix("_loop"));
     let mut instructions = load_params(&names, &[ParamLoad::Ptr(1), ParamLoad::Ptr(2), ParamLoad::U32(1), ParamLoad::U32(2)]);
@@ -28,11 +28,11 @@ pub(super) fn reduction_sum_f32(name: Identifier) -> Entry {
         PtxInstruction::AddU32 { destination: b32(8), left: b32(8), right: U32Value::Imm(1) },
         PtxInstruction::Branch { target: loop_label.clone() },
         PtxInstruction::DefineLabel(done_store.clone()),
-        PtxInstruction::MultiplyWideU32 { destination: b64(5), left: b32(6), right: 4 },
-        PtxInstruction::AddS64 { destination: b64(6), left: b64(2), right: b64(5) },
-        PtxInstruction::StoreGlobalF32 { pointer: b64(6), value: f32(1) },
-        PtxInstruction::DefineLabel(done.clone()),
-        PtxInstruction::Return,
     ]);
+    instructions.extend(linear_f32_ptrs(6, 5, &[(2, 6)]));
+    instructions.extend([
+        PtxInstruction::StoreGlobalF32 { pointer: b64(6), value: f32(1) },
+    ]);
+    instructions.extend(entry_tail(&done));
     Entry { name, parameters, registers: regs(3, 10, 7, 3), instructions }
 }

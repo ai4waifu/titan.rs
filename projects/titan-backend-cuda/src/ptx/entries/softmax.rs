@@ -1,14 +1,14 @@
 use super::{
     super::ast::{Entry, F32Value, Identifier, Label, PtxInstruction, U32Value},
     params::{ParamLoad, buffer_u32_params, load_params, named_params, regs},
-    prologue::linear_index_guard,
+    prologue::{done_label, entry_tail, linear_index_guard},
     regs::{b32, b64, f32, predicate},
 };
 
 pub(super) fn softmax_f32(name: Identifier) -> Entry {
     let names = named_params::<4>(&name);
     let parameters = buffer_u32_params(&names, 2);
-    let done = Label(name.suffix("_done"));
+    let done = done_label(&name);
     let max_loop = Label(name.suffix("_max_loop"));
     let max_done = Label(name.suffix("_max_done"));
     let sum_loop = Label(name.suffix("_sum_loop"));
@@ -61,8 +61,7 @@ pub(super) fn softmax_f32(name: Identifier) -> Entry {
         PtxInstruction::StoreGlobalF32 { pointer: b64(5), value: f32(4) },
         PtxInstruction::AddU32 { destination: b32(8), left: b32(8), right: U32Value::Imm(1) },
         PtxInstruction::Branch { target: normalize_loop.clone() },
-        PtxInstruction::DefineLabel(done.clone()),
-        PtxInstruction::Return,
     ]);
+    instructions.extend(entry_tail(&done));
     Entry { name, parameters, registers: regs(3, 10, 6, 5), instructions }
 }
