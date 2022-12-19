@@ -1,5 +1,6 @@
 use titan_backend_cuda::{
-    CudaCompiler, concat_f32_abi, elementwise_add_f32_abi, gemm_f32_abi, silu_f32_abi, softmax_f32_abi, transpose_f32_abi,
+    CudaCompiler, concat_f32_abi, conv2d_f32_abi, elementwise_add_f32_abi, gemm_f32_abi, layer_norm_f32_abi,
+    reduction_sum_f32_abi, resize_nearest2d_f32_abi, silu_f32_abi, softmax_f32_abi, transpose_f32_abi,
 };
 use titan_kernel::{
     AddressSpace, BasicBlock, BlockId, Instruction, IrType, KernelAbi, KernelError, KernelModule, TargetCompiler, ValueId,
@@ -118,6 +119,25 @@ fn softmax_concat_transpose_emit_atomic_prologues() {
     assert!(transpose.contains("div.u32"));
     assert!(transpose.contains("rem.u32"));
     assert_atomic_prologue(&transpose);
+}
+
+#[test]
+fn reduction_resize_layernorm_conv_emit_shared_prologues() {
+    let reduction = compile_source("reduction.sum.f32", reduction_sum_f32_abi());
+    assert!(reduction.contains("add.rn.f32"));
+    assert_atomic_prologue(&reduction);
+
+    let resize = compile_source("resize.nearest2d.f32", resize_nearest2d_f32_abi());
+    assert!(resize.contains("div.u32"));
+    assert_atomic_prologue(&resize);
+
+    let layer_norm = compile_source("layer_norm.f32", layer_norm_f32_abi());
+    assert!(layer_norm.contains("rsqrt.approx.f32"));
+    assert_atomic_prologue(&layer_norm);
+
+    let conv = compile_source("conv2d.f32", conv2d_f32_abi());
+    assert!(conv.contains("fma.rn.f32"));
+    assert_atomic_prologue(&conv);
 }
 
 #[test]
