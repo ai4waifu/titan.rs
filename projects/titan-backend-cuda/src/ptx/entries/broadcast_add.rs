@@ -1,22 +1,22 @@
 use super::{
-    super::ast::{Entry, F32Value, Identifier, Label, PtxInstruction, U32Value},
+    super::ast::{Entry, F32Value, Identifier, PtxInstruction, U32Value},
     params::{ParamLoad, buffer_u32_params, load_params, named_params, regs},
-    prologue::{done_label, entry_tail, flat_index_guard, f32_byte_offsets, ptr_plus_offset},
-    regs::{b32, b64, f32, predicate},
+    prologue::{done_label, entry_tail, flat_index_guard, f32_byte_offsets, kernel_label, linear_f32_loads, linear_f32_store, ptr_plus_offset},
+    regs::{b32, f32, predicate},
 };
 
 pub(super) fn broadcast_add_f32(name: Identifier) -> Entry {
     let names = named_params::<16>(&name);
     let parameters = buffer_u32_params(&names, 3);
     let done = done_label(&name);
-    let lhs0_done = Label(name.suffix("_lhs_0_done"));
-    let lhs1_done = Label(name.suffix("_lhs_1_done"));
-    let lhs2_done = Label(name.suffix("_lhs_2_done"));
-    let lhs3_done = Label(name.suffix("_lhs_3_done"));
-    let rhs0_done = Label(name.suffix("_rhs_0_done"));
-    let rhs1_done = Label(name.suffix("_rhs_1_done"));
-    let rhs2_done = Label(name.suffix("_rhs_2_done"));
-    let rhs3_done = Label(name.suffix("_rhs_3_done"));
+    let lhs0_done = kernel_label(&name, "_lhs_0_done");
+    let lhs1_done = kernel_label(&name, "_lhs_1_done");
+    let lhs2_done = kernel_label(&name, "_lhs_2_done");
+    let lhs3_done = kernel_label(&name, "_lhs_3_done");
+    let rhs0_done = kernel_label(&name, "_rhs_0_done");
+    let rhs1_done = kernel_label(&name, "_rhs_1_done");
+    let rhs2_done = kernel_label(&name, "_rhs_2_done");
+    let rhs3_done = kernel_label(&name, "_rhs_3_done");
     let mut instructions =
         load_params(&names[..4], &[ParamLoad::Ptr(1), ParamLoad::Ptr(2), ParamLoad::Ptr(3), ParamLoad::U32(1)]);
     instructions.extend(flat_index_guard(&done));
@@ -88,12 +88,9 @@ pub(super) fn broadcast_add_f32(name: Identifier) -> Entry {
     instructions.extend(ptr_plus_offset(4, &[(1, 4)]));
     instructions.extend(ptr_plus_offset(5, &[(2, 5)]));
     instructions.extend(ptr_plus_offset(6, &[(3, 6)]));
-    instructions.extend([
-        PtxInstruction::LoadGlobalF32 { destination: f32(1), pointer: b64(4) },
-        PtxInstruction::LoadGlobalF32 { destination: f32(2), pointer: b64(5) },
-        PtxInstruction::AddRnF32 { destination: f32(3), left: F32Value::Reg(f32(1)), right: F32Value::Reg(f32(2)) },
-        PtxInstruction::StoreGlobalF32 { pointer: b64(6), value: f32(3) },
-    ]);
+    instructions.extend(linear_f32_loads(&[(4, 1), (5, 2)]));
+    instructions.push(PtxInstruction::AddRnF32 { destination: f32(3), left: F32Value::Reg(f32(1)), right: F32Value::Reg(f32(2)) });
+    instructions.push(linear_f32_store(6, 3));
     instructions.extend(entry_tail(&done));
     Entry { name, parameters, registers: regs(2, 17, 7, 4), instructions }
 }

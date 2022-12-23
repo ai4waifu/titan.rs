@@ -1,7 +1,7 @@
 use super::{
-    super::ast::{Entry, F32Value, Identifier, Label, PtxInstruction, U32Value},
+    super::ast::{Entry, F32Value, Identifier, PtxInstruction, U32Value},
     params::{ParamLoad, buffer_u32_params, load_params, named_params, regs},
-    prologue::{bounds_guard, done_label, entry_tail, linear_tid},
+    prologue::{bounds_guard, done_label, entry_tail, kernel_label, linear_tid},
     regs::{b32, b64, f32, predicate},
 };
 
@@ -9,21 +9,21 @@ pub(super) fn scaled_dot_product_attention_f32(name: Identifier) -> Entry {
     let names = named_params::<9>(&name);
     let parameters = buffer_u32_params(&names, 4);
     let done = done_label(&name);
-    let max_loop = Label(name.suffix("_max_loop"));
-    let max_inner_loop = Label(name.suffix("_max_inner_loop"));
-    let max_inner_done = Label(name.suffix("_max_inner_done"));
-    let max_next = Label(name.suffix("_max_next"));
-    let max_done = Label(name.suffix("_max_done"));
-    let sum_loop = Label(name.suffix("_sum_loop"));
-    let sum_inner_loop = Label(name.suffix("_sum_inner_loop"));
-    let sum_inner_done = Label(name.suffix("_sum_inner_done"));
-    let sum_next = Label(name.suffix("_sum_next"));
-    let sum_done = Label(name.suffix("_sum_done"));
-    let value_loop = Label(name.suffix("_value_loop"));
-    let value_inner_loop = Label(name.suffix("_value_inner_loop"));
-    let value_inner_done = Label(name.suffix("_value_inner_done"));
-    let value_next = Label(name.suffix("_value_next"));
-    let value_done = Label(name.suffix("_value_done"));
+    let max_loop = kernel_label(&name, "_max_loop");
+    let max_inner_loop = kernel_label(&name, "_max_inner_loop");
+    let max_inner_done = kernel_label(&name, "_max_inner_done");
+    let max_next = kernel_label(&name, "_max_next");
+    let max_done = kernel_label(&name, "_max_done");
+    let sum_loop = kernel_label(&name, "_sum_loop");
+    let sum_inner_loop = kernel_label(&name, "_sum_inner_loop");
+    let sum_inner_done = kernel_label(&name, "_sum_inner_done");
+    let sum_next = kernel_label(&name, "_sum_next");
+    let sum_done = kernel_label(&name, "_sum_done");
+    let value_loop = kernel_label(&name, "_value_loop");
+    let value_inner_loop = kernel_label(&name, "_value_inner_loop");
+    let value_inner_done = kernel_label(&name, "_value_inner_done");
+    let value_next = kernel_label(&name, "_value_next");
+    let value_done = kernel_label(&name, "_value_done");
     let mut instructions = load_params(
         &names,
         &[

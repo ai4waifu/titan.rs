@@ -1,7 +1,7 @@
 use super::{
-    super::ast::{Entry, F32Value, Identifier, Label, ParameterKind, PtxInstruction, U32Value},
+    super::ast::{Entry, F32Value, Identifier, ParameterKind, PtxInstruction, U32Value},
     params::{ParamLoad, declare_params, load_params, named_params, regs},
-    prologue::{bounds_guard, done_label, entry_tail, linear_tid},
+    prologue::{bounds_guard, done_label, entry_tail, kernel_label, linear_tid},
     regs::{b32, b64, f32, predicate},
 };
 
@@ -25,13 +25,13 @@ pub(super) fn group_norm_f32(name: Identifier) -> Entry {
         ],
     );
     let done = done_label(&name);
-    let mean_loop = Label(name.suffix("_mean_loop"));
-    let mean_done = Label(name.suffix("_mean_done"));
-    let var_loop = Label(name.suffix("_var_loop"));
-    let var_done = Label(name.suffix("_var_done"));
-    let store_loop = Label(name.suffix("_store_loop"));
-    let no_gamma = Label(name.suffix("_no_gamma"));
-    let no_beta = Label(name.suffix("_no_beta"));
+    let mean_loop = kernel_label(&name, "_mean_loop");
+    let mean_done = kernel_label(&name, "_mean_done");
+    let var_loop = kernel_label(&name, "_var_loop");
+    let var_done = kernel_label(&name, "_var_done");
+    let store_loop = kernel_label(&name, "_store_loop");
+    let no_gamma = kernel_label(&name, "_no_gamma");
+    let no_beta = kernel_label(&name, "_no_beta");
     let mut instructions = load_params(
         &names,
         &[

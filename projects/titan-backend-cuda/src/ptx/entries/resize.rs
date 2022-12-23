@@ -1,8 +1,8 @@
 use super::{
     super::ast::{Entry, Identifier, PtxInstruction, U32Value},
     params::{ParamLoad, buffer_u32_params, load_params, named_params, regs},
-    prologue::{bounds_guard, done_label, entry_tail, f32_byte_offsets, linear_tid, ptr_plus_offset},
-    regs::{b32, b64, f32},
+    prologue::{bounds_guard, done_label, entry_tail, f32_byte_offsets, linear_f32_load, linear_f32_store, linear_tid, ptr_plus_offset},
+    regs::{b32, b64},
 };
 
 pub(super) fn resize_nearest2d_f32(name: Identifier) -> Entry {
@@ -50,10 +50,8 @@ pub(super) fn resize_nearest2d_f32(name: Identifier) -> Entry {
     instructions.extend(f32_byte_offsets(&[(20, 3), (10, 4)]));
     instructions.extend(ptr_plus_offset(3, &[(1, 5)]));
     instructions.extend(ptr_plus_offset(4, &[(2, 6)]));
-    instructions.extend([
-        PtxInstruction::LoadGlobalF32 { destination: f32(1), pointer: b64(5) },
-        PtxInstruction::StoreGlobalF32 { pointer: b64(6), value: f32(1) },
-    ]);
+    instructions.push(linear_f32_load(5, 1));
+    instructions.push(linear_f32_store(6, 1));
     instructions.extend(entry_tail(&done));
     Entry { name, parameters, registers: regs(2, 21, 7, 2), instructions }
 }

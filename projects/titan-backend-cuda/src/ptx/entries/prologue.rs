@@ -2,12 +2,17 @@
 
 use super::{
     super::ast::{Identifier, Label, PtxInstruction, U32Value},
-    regs::{b32, b64, predicate},
+    regs::{b32, b64, f32, predicate},
 };
+
+/// `{name}{suffix}` branch/loop label (suffix includes leading `_`, e.g. `"_max_loop"`).
+pub(super) fn kernel_label(name: &Identifier, suffix: &str) -> Label {
+    Label(name.suffix(suffix))
+}
 
 /// Standard kernel exit label (`{name}_done`).
 pub(super) fn done_label(name: &Identifier) -> Label {
-    Label(name.suffix("_done"))
+    kernel_label(name, "_done")
 }
 
 /// `done:` followed by `ret`.
@@ -93,4 +98,19 @@ pub(super) fn linear_f32_ptrs(index_reg: u8, offset_reg: u8, ptrs: &[(u8, u8)]) 
     let mut instructions = vec![f32_byte_offset(index_reg, offset_reg)];
     instructions.extend(ptr_plus_offset(offset_reg, ptrs));
     instructions
+}
+
+/// `ld.global.f32` from a computed `%rd` pointer into `%f`.
+pub(super) fn linear_f32_load(pointer: u8, value: u8) -> PtxInstruction {
+    PtxInstruction::LoadGlobalF32 { destination: f32(value), pointer: b64(pointer) }
+}
+
+/// Batch `linear_f32_load` for `(pointer, value)` pairs.
+pub(super) fn linear_f32_loads(loads: &[(u8, u8)]) -> Vec<PtxInstruction> {
+    loads.iter().copied().map(|(pointer, value)| linear_f32_load(pointer, value)).collect()
+}
+
+/// `st.global.f32` from `%f` into a computed `%rd` pointer.
+pub(super) fn linear_f32_store(pointer: u8, value: u8) -> PtxInstruction {
+    PtxInstruction::StoreGlobalF32 { pointer: b64(pointer), value: f32(value) }
 }

@@ -1,21 +1,21 @@
 use super::{
-    super::ast::{Entry, F32Value, Identifier, Label, PtxInstruction},
+    super::ast::{Entry, F32Value, Identifier, PtxInstruction},
     params::{ParamLoad, buffer_u32_params, load_params, named_params, regs},
-    prologue::{done_label, entry_tail, flat_index_guard, linear_f32_ptrs},
-    regs::{b64, f32, predicate},
+    prologue::{done_label, entry_tail, flat_index_guard, kernel_label, linear_f32_load, linear_f32_ptrs, linear_f32_store},
+    regs::{f32, predicate},
 };
 
 pub(super) fn gelu_f32(name: Identifier) -> Entry {
     let names = named_params::<3>(&name);
     let parameters = buffer_u32_params(&names, 2);
     let done = done_label(&name);
-    let negative = Label(name.suffix("_negative"));
-    let signed_done = Label(name.suffix("_signed_done"));
+    let negative = kernel_label(&name, "_negative");
+    let signed_done = kernel_label(&name, "_signed_done");
     let mut instructions = load_params(&names, &[ParamLoad::Ptr(1), ParamLoad::Ptr(2), ParamLoad::U32(1)]);
     instructions.extend(flat_index_guard(&done));
     instructions.extend(linear_f32_ptrs(5, 3, &[(1, 4), (2, 5)]));
+    instructions.push(linear_f32_load(4, 1));
     instructions.extend([
-        PtxInstruction::LoadGlobalF32 { destination: f32(1), pointer: b64(4) },
         PtxInstruction::MulRnF32 { destination: f32(2), left: F32Value::Reg(f32(1)), right: F32Value::ImmBits(0x3F3504F3) },
         PtxInstruction::MoveF32 { destination: f32(3), source: f32(2) },
         PtxInstruction::SetPredicateLtF32 {
@@ -69,8 +69,8 @@ pub(super) fn gelu_f32(name: Identifier) -> Entry {
         PtxInstruction::AddRnF32 { destination: f32(6), left: F32Value::Reg(f32(6)), right: F32Value::ImmBits(0x3F800000) },
         PtxInstruction::MulRnF32 { destination: f32(6), left: F32Value::Reg(f32(6)), right: F32Value::Reg(f32(1)) },
         PtxInstruction::MulRnF32 { destination: f32(6), left: F32Value::Reg(f32(6)), right: F32Value::ImmBits(0x3F000000) },
-        PtxInstruction::StoreGlobalF32 { pointer: b64(5), value: f32(6) },
     ]);
+    instructions.push(linear_f32_store(5, 6));
     instructions.extend(entry_tail(&done));
     Entry { name, parameters, registers: regs(3, 6, 6, 10), instructions }
 }
