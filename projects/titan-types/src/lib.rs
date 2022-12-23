@@ -9,6 +9,8 @@ pub enum BackendId {
     Cpu,
     Cuda,
     Rocm,
+    /// WebGPU adapter backend (Vulkan / DX12 / Metal via wgpu).
+    Wgpu,
 }
 
 /// A concrete device owned by a backend session.

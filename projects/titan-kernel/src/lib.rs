@@ -97,6 +97,8 @@ pub enum KernelTarget {
     CpuAvx2,
     CudaPtx,
     RocmGfx1100,
+    /// WGSL compute shaders for WebGPU adapters.
+    WgpuWgsl,
 }
 
 /// A bounded launch configuration that strategies can tune.

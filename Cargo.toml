@@ -27,6 +27,7 @@ titan-model = { path = "projects/titan-model" }
 titan-backend-cpu = { path = "projects/titan-backend-cpu" }
 titan-backend-cuda = { path = "projects/titan-backend-cuda" }
 titan-backend-rocm = { path = "projects/titan-backend-rocm" }
+titan-backend-wgpu = { path = "projects/titan-backend-wgpu" }
 titan-types = { path = "projects/titan-types" }
 libloading = "0.8"
 serde = { version = "1.0.229", features = ["derive"] }

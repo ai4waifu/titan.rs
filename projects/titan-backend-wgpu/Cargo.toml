@@ -1,0 +1,17 @@
+[package]
+name = "titan-backend-wgpu"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme = "readme.md"
+
+[dependencies]
+titan-hal.workspace = true
+titan-kernel.workspace = true
+titan-types.workspace = true
+wgpu = "24"
+pollster = "0.4"
+
+[dev-dependencies]
+titan-kernel.workspace = true
