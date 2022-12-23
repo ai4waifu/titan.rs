@@ -193,6 +193,12 @@ pub trait DeviceSession: Send + Sync {
     ) -> Result<Arc<dyn Event>, HalError>;
     fn poll(&self, event: &dyn Event) -> Result<bool, HalError>;
     fn wait(&self, event: &dyn Event) -> Result<(), HalError>;
+    /// Make `stream` wait until `event` completes (cross-stream dependency).
+    ///
+    /// Same-stream ordering is already implied by submission order; use this for
+    /// upload→compute and other cross-stream edges. Host-side awaits must not
+    /// substitute for this HAL primitive.
+    fn wait_event(&self, stream: &dyn Stream, event: &dyn Event) -> Result<(), HalError>;
 }
 
 /// Discoverable backend driver.

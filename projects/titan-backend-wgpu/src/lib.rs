@@ -701,6 +701,12 @@ impl DeviceSession for WgpuSession {
         }
         Ok(())
     }
+
+    fn wait_event(&self, stream: &dyn Stream, event: &dyn Event) -> Result<(), HalError> {
+        let _ = self.stream(stream)?;
+        // Prototype queue is host-ordered; validate stream then wait for completion.
+        self.wait(event)
+    }
 }
 
 impl BackendDriver for WgpuDriver {
