@@ -13,6 +13,7 @@ edition.workspace = true
 exclude = ["package.json", "tests/**"]
 
 [dependencies]
+serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 
