@@ -31,6 +31,9 @@ impl Buffer for CpuBuffer {
     fn identity(&self) -> u64 {
         self.id
     }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 #[derive(Debug)]
 struct CpuStream(DeviceId);
@@ -38,12 +41,18 @@ impl Stream for CpuStream {
     fn device(&self) -> DeviceId {
         self.0
     }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 #[derive(Debug)]
 struct CpuEvent(DeviceId);
 impl Event for CpuEvent {
     fn device(&self) -> DeviceId {
         self.0
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 #[derive(Debug)]

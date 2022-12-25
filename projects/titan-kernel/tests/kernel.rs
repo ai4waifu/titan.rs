@@ -15,6 +15,9 @@ impl Buffer for FakeBuffer {
     fn identity(&self) -> u64 {
         1
     }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[test]

@@ -204,6 +204,10 @@ impl Buffer for WgpuBuffer {
     fn identity(&self) -> u64 {
         self.id
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[derive(Debug)]
@@ -214,6 +218,10 @@ struct WgpuStream {
 impl Stream for WgpuStream {
     fn device(&self) -> DeviceId {
         self.context.device_id
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -226,6 +234,10 @@ struct WgpuEvent {
 impl Event for WgpuEvent {
     fn device(&self) -> DeviceId {
         self.context.device_id
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

@@ -157,7 +157,8 @@ unsafe impl Send for CudaAllocation {}
 unsafe impl Sync for CudaAllocation {}
 
 impl CudaAllocation {
-    fn raw(&self) -> CuDevicePtr {
+    /// Raw CUDA device pointer for interop adapters (UCF / DXO).
+    pub fn device_ptr(&self) -> u64 {
         self.pointer
     }
 
@@ -989,10 +990,23 @@ impl TargetCompiler for CudaCompiler {
     }
 }
 
+/// CUDA device buffer exposed for interop downcasts via [`Buffer::as_any`].
 #[derive(Debug)]
-struct CudaBuffer {
+pub struct CudaBuffer {
     id: u64,
     allocation: Arc<CudaAllocation>,
+}
+
+impl CudaBuffer {
+    /// Raw CUDA device pointer (`CUdeviceptr` as `u64`).
+    pub fn device_ptr(&self) -> u64 {
+        self.allocation.device_ptr()
+    }
+
+    /// Shared allocation handle.
+    pub fn allocation(&self) -> &Arc<CudaAllocation> {
+        &self.allocation
+    }
 }
 
 impl Buffer for CudaBuffer {
@@ -1007,12 +1021,24 @@ impl Buffer for CudaBuffer {
     fn identity(&self) -> u64 {
         self.id
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
+/// CUDA stream exposed for interop downcasts via [`Stream::as_any`].
 #[derive(Debug)]
-struct CudaStream {
+pub struct CudaStream {
     context: Arc<CudaContext>,
     raw: CuStreamHandle,
+}
+
+impl CudaStream {
+    /// Raw `CUstream` pointer.
+    pub fn raw(&self) -> *mut c_void {
+        self.raw
+    }
 }
 
 unsafe impl Send for CudaStream {}
@@ -1021,6 +1047,10 @@ unsafe impl Sync for CudaStream {}
 impl Stream for CudaStream {
     fn device(&self) -> DeviceId {
         self.context.device()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -1038,11 +1068,19 @@ impl Drop for CudaStream {
     }
 }
 
+/// CUDA event exposed for interop downcasts via [`Event::as_any`].
 #[derive(Debug)]
-struct CudaEvent {
+pub struct CudaEvent {
     context: Arc<CudaContext>,
     raw: CuEventHandle,
     staging: Option<Arc<[u8]>>,
+}
+
+impl CudaEvent {
+    /// Raw `CUevent` pointer.
+    pub fn raw(&self) -> *mut c_void {
+        self.raw
+    }
 }
 
 unsafe impl Send for CudaEvent {}
@@ -1051,6 +1089,10 @@ unsafe impl Sync for CudaEvent {}
 impl Event for CudaEvent {
     fn device(&self) -> DeviceId {
         self.context.device()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -1230,7 +1272,7 @@ impl DeviceSession for CudaSession {
         let copy: Symbol<CuMemcpyHtoDAsync> =
             symbol(&self.context.library, b"cuMemcpyHtoDAsync_v2\0", "resolve_cuMemcpyHtoDAsync")?;
         unsafe {
-            check("cuMemcpyHtoDAsync", copy(destination.allocation.raw(), staging.as_ptr().cast(), staging.len(), stream.raw))?
+            check("cuMemcpyHtoDAsync", copy(destination.allocation.device_ptr(), staging.as_ptr().cast(), staging.len(), stream.raw))?
         };
         match self.record(&stream, Some(staging.clone())) {
             Ok(event) => Ok(event),
@@ -1254,7 +1296,7 @@ impl DeviceSession for CudaSession {
         self.context.activate()?;
         let copy: Symbol<CuMemcpyDtoHAsync> =
             symbol(&self.context.library, b"cuMemcpyDtoHAsync_v2\0", "resolve_cuMemcpyDtoHAsync")?;
-        unsafe { check("cuMemcpyDtoHAsync", copy(dst.as_mut_ptr().cast(), source.allocation.raw(), dst.len(), stream.raw))? };
+        unsafe { check("cuMemcpyDtoHAsync", copy(dst.as_mut_ptr().cast(), source.allocation.device_ptr(), dst.len(), stream.raw))? };
         // The HAL's borrowed host destination cannot outlive this call, so D2H
         // must complete before returning even though it runs through the stream.
         let synchronize: Symbol<CuStreamSynchronize> =
@@ -1273,7 +1315,7 @@ impl DeviceSession for CudaSession {
         self.context.activate()?;
         let copy: Symbol<CuMemcpyDtoDAsync> =
             symbol(&self.context.library, b"cuMemcpyDtoDAsync_v2\0", "resolve_cuMemcpyDtoDAsync")?;
-        unsafe { check("cuMemcpyDtoDAsync", copy(destination.allocation.raw(), source.allocation.raw(), bytes, stream.raw))? };
+        unsafe { check("cuMemcpyDtoDAsync", copy(destination.allocation.device_ptr(), source.allocation.device_ptr(), bytes, stream.raw))? };
         self.record(&stream, None)
     }
 
@@ -1406,7 +1448,7 @@ impl DeviceSession for CudaSession {
                         .bindings()
                         .get(&slot)
                         .ok_or_else(|| error("launch", format!("missing buffer binding for slot {slot}")))?;
-                    self.buffer(binding.buffer.as_ref())?.allocation.raw().to_ne_bytes().to_vec()
+                    self.buffer(binding.buffer.as_ref())?.allocation.device_ptr().to_ne_bytes().to_vec()
                 }
                 LaunchArgKind::Scalar { byte_len } => {
                     let length_end = cursor.checked_add(4).ok_or_else(|| error("launch", "scalar length overflow"))?;

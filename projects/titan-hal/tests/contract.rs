@@ -14,6 +14,9 @@ impl Buffer for FakeBuffer {
     fn identity(&self) -> u64 {
         self.1
     }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 struct EmptyDriver;
@@ -30,9 +33,10 @@ impl BackendDriver for EmptyDriver {
 }
 
 #[test]
-fn backend_contract_does_not_expose_operator_methods() {
-    assert_eq!(EmptyDriver.id(), BackendId::Cpu);
-    assert!(EmptyDriver.enumerate().unwrap().is_empty());
+fn buffer_as_any_round_trips_fake() {
+    let buf: Arc<dyn Buffer> = Arc::new(FakeBuffer(device(0), 7));
+    let fake = buf.as_any().downcast_ref::<FakeBuffer>().expect("FakeBuffer");
+    assert_eq!(fake.1, 7);
 }
 
 fn device(ordinal: u32) -> DeviceId {

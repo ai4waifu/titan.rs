@@ -35,11 +35,19 @@ impl From<HalError> for titan_types::TitanError {
 }
 
 /// Opaque device allocation. It carries no host-slice access contract.
+///
+/// Backend adapters may downcast via [`Buffer::as_any`] to recover native
+/// handles (for example a CUDA device pointer). Callers outside that backend
+/// must not reinterpret [`Buffer::identity`] as an address.
 pub trait Buffer: fmt::Debug + Send + Sync {
+    /// Owning device.
     fn device(&self) -> DeviceId;
+    /// Allocation size in bytes.
     fn byte_len(&self) -> usize;
-    /// 后端私有的稳定 identity；上层不得将其解释为原生地址。
+    /// Backend-private stable identity. Upper layers must not treat this as a native address.
     fn identity(&self) -> u64;
+    /// Type-erasure hook for backend-private downcasts.
+    fn as_any(&self) -> &dyn Any;
 }
 
 /// A concrete slot-to-buffer launch binding.
@@ -71,11 +79,17 @@ impl fmt::Debug for BufferBinding {
 }
 /// Opaque command stream.
 pub trait Stream: fmt::Debug + Send + Sync {
+    /// Owning device.
     fn device(&self) -> DeviceId;
+    /// Type-erasure hook for backend-private downcasts.
+    fn as_any(&self) -> &dyn Any;
 }
 /// Opaque completion event.
 pub trait Event: fmt::Debug + Send + Sync {
+    /// Owning device.
     fn device(&self) -> DeviceId;
+    /// Type-erasure hook for backend-private downcasts.
+    fn as_any(&self) -> &dyn Any;
 }
 /// Loaded kernel artifact.
 pub trait LoadedKernel: fmt::Debug + Send + Sync + Any {
