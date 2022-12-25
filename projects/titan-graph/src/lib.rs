@@ -5,6 +5,7 @@
 
 mod diagnostic;
 mod graph;
+mod optimize;
 mod pass;
 
 pub use diagnostic::{codes, IrDiagnostic, Severity};
@@ -12,4 +13,5 @@ pub use graph::{
     attr_int, empty_attrs, f32_contiguous, span, EffectContract, GRAPH_SCHEMA_VERSION, Graph, GraphConstraint,
     GraphNode, NodeId, OpRequest, TensorSpec, ValueId,
 };
+pub use optimize::{run_core_pipeline, PassReport};
 pub use pass::{builtin_pass_registry, PassDecl, PassFailureBehavior, PassRegistry, PassStage};

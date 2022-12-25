@@ -14,14 +14,15 @@ use titan_backend_cuda::{
     silu_f32_abi as cuda_silu_abi, slice_f32_abi as cuda_slice_abi, softmax_f32_abi as cuda_softmax_abi,
     transpose_f32_abi as cuda_transpose_abi,
 };
-use titan_graph::{Graph, OpRequest};
+use titan_graph::{run_core_pipeline, Graph, IrDiagnostic, OpRequest, PassReport, ValueId};
 use titan_hal::LaunchGeometry;
 use titan_kernel::{AddressSpace, BasicBlock, BlockId, Instruction, IrType, KernelAbi, KernelArg, KernelModule, ValueId};
 use titan_profiler::Profiler;
 use titan_schema::builtin_registry;
 use titan_tensor::TensorHandle;
 use titan_types::{
-    AbiHash, BackendId, CandidateId, DType, DeviceFingerprint, KernelId, KernelLaunchMetadata, OperatorId, SourceSpan,
+    AbiHash, AttrValue, BackendId, CandidateId, DType, DeviceFingerprint, KernelId, KernelLaunchMetadata, OperatorId,
+    SourceSpan,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -157,28 +158,118 @@ pub struct CompileOptions {
     /// 是否允许调优。
     pub tune: bool,
 }
-/// 已规范化的图执行计划。
+/// 已规范化的图执行计划（Core passes 之后）。
 #[derive(Clone, Debug)]
 pub struct ExecutionPlan {
-    requests: Vec<OpRequest>,
+    graph: Graph,
+    reports: Vec<PassReport>,
 }
-/// 图输入绑定。
+/// 图输入绑定：`Graph.inputs` → host/device tensors。
 #[derive(Clone, Debug, Default)]
-pub struct GraphBindings;
+pub struct GraphBindings {
+    /// ValueId → tensor handle.
+    pub tensors: HashMap<ValueId, TensorHandle>,
+}
 impl ExecutionPlan {
     /// 返回计划中的节点数量。
     pub fn node_count(&self) -> usize {
-        self.requests.len()
+        self.graph.nodes.len()
     }
-    /// 使用与 eager 相同的 request dispatch 管线执行计划。
-    pub fn execute(&self, runtime: &mut Runtime, _bindings: &GraphBindings) -> Result<ExecutionHandle, ExecutionError> {
-        let request = self.requests.first().cloned().ok_or_else(|| ExecutionError {
-            operator: OperatorId("graph.empty".into()),
-            source: SourceSpan { file: "<graph>".into(), line: 0, column: 0 },
-            phase: "compile",
-            message: "graph has no executable nodes".into(),
-        })?;
-        runtime.execute(request)
+    /// Pass reports from `run_core_pipeline`.
+    pub fn pass_reports(&self) -> &[PassReport] {
+        &self.reports
+    }
+    /// Optimized graph (post-pass).
+    pub fn graph(&self) -> &Graph {
+        &self.graph
+    }
+    /// 按节点序执行；中间值写入绑定环境；返回图 outputs。
+    pub fn execute(&self, runtime: &mut Runtime, bindings: &GraphBindings) -> Result<ExecutionHandle, ExecutionError> {
+        let mut env = bindings.tensors.clone();
+        for input in &self.graph.inputs {
+            if !env.contains_key(input) {
+                return Err(ExecutionError {
+                    operator: OperatorId("graph.bind".into()),
+                    source: SourceSpan { file: "<graph>".into(), line: 0, column: 0 },
+                    phase: "bind",
+                    message: format!("missing binding for input value {}", input.0),
+                });
+            }
+        }
+        let mut last_outputs = Vec::new();
+        for node in &self.graph.nodes {
+            let mut inputs = Vec::with_capacity(node.inputs.len());
+            for id in &node.inputs {
+                let Some(tensor) = env.get(id).cloned() else {
+                    return Err(ExecutionError {
+                        operator: node.operator.clone(),
+                        source: node.source.clone(),
+                        phase: "bind",
+                        message: format!("missing tensor for value {}", id.0),
+                    });
+                };
+                inputs.push(tensor);
+            }
+            let mut outputs = Vec::with_capacity(node.outputs.len());
+            for id in &node.outputs {
+                let Some(spec) = self.graph.values.get(id).cloned() else {
+                    return Err(ExecutionError {
+                        operator: node.operator.clone(),
+                        source: node.source.clone(),
+                        phase: "bind",
+                        message: format!("missing TensorSpec for value {}", id.0),
+                    });
+                };
+                outputs.push(spec);
+            }
+            let request = OpRequest {
+                operator: node.operator.clone(),
+                inputs,
+                outputs,
+                attrs: node.attrs.clone(),
+                effects: node.effects,
+                source: node.source.clone(),
+            };
+            let handle = runtime.execute(request)?;
+            let result = handle.wait()?;
+            if result.outputs.len() != node.outputs.len() {
+                return Err(ExecutionError {
+                    operator: node.operator.clone(),
+                    source: node.source.clone(),
+                    phase: "execute",
+                    message: format!(
+                        "node {} produced {} outputs, expected {}",
+                        node.id.0,
+                        result.outputs.len(),
+                        node.outputs.len()
+                    ),
+                });
+            }
+            for (vid, tensor) in node.outputs.iter().zip(result.outputs.iter()) {
+                env.insert(*vid, tensor.clone());
+            }
+            last_outputs = result.outputs;
+        }
+        let mut graph_outputs = Vec::with_capacity(self.graph.outputs.len());
+        for id in &self.graph.outputs {
+            let Some(tensor) = env.get(id).cloned() else {
+                return Err(ExecutionError {
+                    operator: OperatorId("graph.output".into()),
+                    source: SourceSpan { file: "<graph>".into(), line: 0, column: 0 },
+                    phase: "bind",
+                    message: format!("missing output value {}", id.0),
+                });
+            };
+            graph_outputs.push(tensor);
+        }
+        if graph_outputs.is_empty() {
+            graph_outputs = last_outputs;
+        }
+        Ok(ExecutionHandle {
+            outputs: graph_outputs,
+            candidate: CandidateId("cpu/graph".into()),
+            kernel: KernelId("graph.plan".into()),
+        })
     }
 }
 /// Structured runtime dispatch failure.
@@ -195,6 +286,15 @@ impl std::fmt::Display for ExecutionError {
     }
 }
 impl std::error::Error for ExecutionError {}
+
+fn ir_to_execution_error(diag: IrDiagnostic) -> ExecutionError {
+    ExecutionError {
+        operator: OperatorId(diag.operation.clone().unwrap_or_else(|| "graph.ir".into())),
+        source: SourceSpan { file: "<graph>".into(), line: 0, column: 0 },
+        phase: "compile",
+        message: format!("{}: {}", diag.code, diag.message),
+    }
+}
 
 fn hal_execution_error(operator: &OperatorId, source: &SourceSpan, phase: &'static str, message: String) -> ExecutionError {
     ExecutionError { operator: operator.clone(), source: source.clone(), phase, message }
@@ -496,6 +596,27 @@ fn unary_same_shape(
         return Err(format!("{operation} output shape must match input"));
     }
     Ok(input.iter().copied().map(f).collect())
+}
+
+fn wants_fused_relu(attrs: &titan_types::AttrMap) -> bool {
+    match attrs.get("fused_relu") {
+        Some(AttrValue::Bool(true)) => true,
+        Some(AttrValue::Int(v)) if *v != 0 => true,
+        _ => false,
+    }
+}
+
+fn apply_fused_relu_if_requested(request: &OpRequest, output: TensorHandle) -> Result<TensorHandle, String> {
+    if !wants_fused_relu(&request.attrs) {
+        return Ok(output);
+    }
+    let session = output.session().ok_or_else(|| "fused relu requires session".to_string())?.clone();
+    let shape = output.shape().to_vec();
+    let mut values = output.to_vec_f32().map_err(|e| e.to_string())?;
+    for v in &mut values {
+        *v = v.max(0.0);
+    }
+    TensorHandle::from_f32_vec(session, shape, &values).map_err(|e| e.to_string())
 }
 
 fn erf_approximation(value: f32) -> f32 {
@@ -1120,6 +1241,12 @@ impl Runtime {
                 | "gemm"
                 | "conv2d"
                 | "scaled_dot_product_attention"
+                | "elementwise.mul.f32"
+                | "elementwise.mul"
+                | "mul"
+                | "elementwise.relu.f32"
+                | "elementwise.relu"
+                | "relu"
         ) {
             return self.execute_cpu_reference(request);
         }
@@ -2823,6 +2950,8 @@ impl Runtime {
             BackendId::Cuda => CandidateId("cuda/driver".into()),
             _ => unreachable!(),
         };
+        let output = apply_fused_relu_if_requested(&request, output)
+            .map_err(|message| ExecutionError { operator: operator.clone(), source: source.clone(), phase: "fuse", message })?;
         Ok(ExecutionHandle { outputs: vec![output], candidate, kernel: kernel_id })
     }
 
@@ -2920,6 +3049,15 @@ impl Runtime {
                 scaled_dot_product_attention(&values, &shapes, &request.attrs, &out_shape).map_err(fail)?
             }
             "broadcast.add" => broadcast_add(&values, &shapes, &out_shape).map_err(fail)?,
+            "elementwise.mul.f32" | "elementwise.mul" | "mul" => {
+                if values.len() != 2 || shapes[0] != shapes[1] || shapes[0] != out_shape {
+                    return Err(fail("elementwise mul requires two matching shapes".into()));
+                }
+                values[0].iter().zip(values[1].iter()).map(|(a, b)| a * b).collect()
+            }
+            "elementwise.relu.f32" | "elementwise.relu" | "relu" => {
+                unary_same_shape(&values[0], &shapes[0], &out_shape, "relu", |v| v.max(0.0)).map_err(fail)?
+            }
             "silu" => unary_same_shape(&values[0], &shapes[0], &out_shape, "silu", |value| value / (1.0 + (-value).exp()))
                 .map_err(fail)?,
             "gelu" => unary_same_shape(&values[0], &shapes[0], &out_shape, "gelu", gelu).map_err(fail)?,
@@ -2942,6 +3080,8 @@ impl Runtime {
         };
         let output = TensorHandle::from_f32_vec(session, out_shape, &result)
             .map_err(|e| hal_execution_error(&operator, &source, "allocate", e.to_string()))?;
+        let output = apply_fused_relu_if_requested(&request, output)
+            .map_err(|message| ExecutionError { operator: operator.clone(), source: source.clone(), phase: "fuse", message })?;
         Ok(ExecutionHandle {
             outputs: vec![output],
             candidate: CandidateId("cpu/reference".into()),
@@ -3325,22 +3465,18 @@ impl Runtime {
     pub fn artifact_cache_stats(&self) -> (u64, u64) {
         (self.cache_hits, self.cache_misses)
     }
-    /// 编译 typed graph；每个节点保留同一 OpRequest 协议。
+    /// 编译 typed graph：validate + DCE + elementwise fusion → ExecutionPlan。
     pub fn compile(&mut self, graph: Graph, _options: CompileOptions) -> Result<ExecutionPlan, ExecutionError> {
+        let (graph, reports) = run_core_pipeline(graph).map_err(ir_to_execution_error)?;
         if graph.nodes.is_empty() {
             return Err(ExecutionError {
                 operator: OperatorId("graph.empty".into()),
                 source: SourceSpan { file: "<graph>".into(), line: 0, column: 0 },
                 phase: "compile",
-                message: "graph has no nodes".into(),
+                message: "graph has no nodes after passes".into(),
             });
         }
-        Err(ExecutionError {
-            operator: OperatorId("graph.compile".into()),
-            source: SourceSpan { file: "<graph>".into(), line: 0, column: 0 },
-            phase: "compile",
-            message: "graph lowering requires runtime tensor bindings".into(),
-        })
+        Ok(ExecutionPlan { graph, reports })
     }
     /// Returns the active runtime configuration.
     pub fn config(&self) -> RuntimeConfig {
