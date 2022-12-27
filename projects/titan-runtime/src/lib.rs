@@ -16,7 +16,10 @@ use titan_backend_cuda::{
 };
 use titan_graph::{run_core_pipeline, Graph, IrDiagnostic, OpRequest, PassReport, ValueId};
 use titan_hal::LaunchGeometry;
-use titan_kernel::{AddressSpace, BasicBlock, BlockId, Instruction, IrType, KernelAbi, KernelArg, KernelModule, ValueId};
+use titan_kernel::{
+    AddressSpace, BasicBlock, BlockId, Instruction, IrType, KernelAbi, KernelArg, KernelModule,
+    ValueId as KernelValueId,
+};
 use titan_profiler::Profiler;
 use titan_schema::builtin_registry;
 use titan_tensor::TensorHandle;
@@ -309,31 +312,31 @@ fn cuda_add_ir(abi: KernelAbi) -> KernelModule {
             params: vec![],
             instructions: vec![
                 (
-                    ValueId(0),
+                    KernelValueId(0),
                     Instruction::Parameter {
                         index: 0,
                         ty: IrType::Pointer { address_space: AddressSpace::Global, dtype: DType::F32 },
                     },
                 ),
                 (
-                    ValueId(1),
+                    KernelValueId(1),
                     Instruction::Parameter {
                         index: 1,
                         ty: IrType::Pointer { address_space: AddressSpace::Global, dtype: DType::F32 },
                     },
                 ),
                 (
-                    ValueId(2),
+                    KernelValueId(2),
                     Instruction::Parameter {
                         index: 2,
                         ty: IrType::Pointer { address_space: AddressSpace::Global, dtype: DType::F32 },
                     },
                 ),
-                (ValueId(3), Instruction::Parameter { index: 3, ty: IrType::I32 }),
-                (ValueId(4), Instruction::Load { ptr: ValueId(0), ty: IrType::F32 }),
-                (ValueId(5), Instruction::Load { ptr: ValueId(1), ty: IrType::F32 }),
-                (ValueId(6), Instruction::Add { lhs: ValueId(4), rhs: ValueId(5) }),
-                (ValueId(7), Instruction::Store { ptr: ValueId(2), value: ValueId(6) }),
+                (KernelValueId(3), Instruction::Parameter { index: 3, ty: IrType::I32 }),
+                (KernelValueId(4), Instruction::Load { ptr: KernelValueId(0), ty: IrType::F32 }),
+                (KernelValueId(5), Instruction::Load { ptr: KernelValueId(1), ty: IrType::F32 }),
+                (KernelValueId(6), Instruction::Add { lhs: KernelValueId(4), rhs: KernelValueId(5) }),
+                (KernelValueId(7), Instruction::Store { ptr: KernelValueId(2), value: KernelValueId(6) }),
             ],
         }],
         abi,
