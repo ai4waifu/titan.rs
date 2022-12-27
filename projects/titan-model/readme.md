@@ -1,3 +1,3 @@
 # titan-model
 
-Minimal model API, linear module, deployment manifest, and ONNX-compatible interchange contract.
+提供最小模型 API、线性模块、部署 manifest 和兼容 ONNX 的交换合同。

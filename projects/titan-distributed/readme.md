@@ -1,3 +1,3 @@
 # titan-distributed
 
-Transport-independent distributed collective interfaces and a local ring implementation.
+与 transport 无关的分布式 collective 接口和本地 ring 实现。

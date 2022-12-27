@@ -1,4 +1,3 @@
 # titan-backend-rocm
 
-ROCm backend boundary for Titan.rs. Device discovery and code-object loading are
-provided through the backend contract when a supported ROCm runtime is present.
+Titan.rs 的 ROCm backend 边界。存在受支持的 ROCm runtime 时，通过 backend 合同提供设备发现和 code object 加载。

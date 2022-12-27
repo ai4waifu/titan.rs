@@ -1,4 +1,3 @@
 # titan-backend-cpu
 
-CPU `DeviceSession` implementation for Titan.rs. This crate owns CPU resource
-allocation and transfer behavior; kernel compilation is provided separately.
+Titan.rs 的 CPU `DeviceSession` 实现。本 crate 负责 CPU 资源分配与传输行为，kernel 编译由独立组件提供。

@@ -1,6 +1,5 @@
 # titan-backend-wgpu
 
-WebGPU backend for Titan's backend-neutral `DeviceSession` / HAL contract.
+Titan backend-neutral `DeviceSession` / HAL 合同的 WebGPU backend。
 
-The crate exposes `WgpuDriver`, `WgpuCompiler`, and the same fixed launch ABIs used by
-`titan-backend-cuda` for the initial vertical slice (`gemm.f32`, `elementwise.add.f32`).
+本 crate 暴露 `WgpuDriver`、`WgpuCompiler`，并在首个垂直切片（`gemm.f32`、`elementwise.add.f32`）中使用与 `titan-backend-cuda` 相同的固定 launch ABI。

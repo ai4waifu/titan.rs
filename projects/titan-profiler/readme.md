@@ -1,3 +1,3 @@
 # titan-profiler
 
-Lightweight in-process telemetry aggregation for Titan operators.
+面向 Titan 算子的轻量进程内 telemetry 聚合。

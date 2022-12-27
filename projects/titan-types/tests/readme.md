@@ -1,12 +1,12 @@
-# Grammar Reference
+# 语法参考
 
 ```bash
 wee test
 ```
 
-## CRUD
+## 增删改查
 
-### Create
+### 创建
 
 ```vql
 table_1.insert {
@@ -20,11 +20,11 @@ INSERT INTO table_1 (col_a, col_b)
 VALUES (0, CURRENT_TIMESTAMP);
 ```
 
-### Read
+### 读取
 
-### List
+### 列表
 
-### Update
+### 更新
 
 ```vql
 table_1.update(id) {
@@ -63,7 +63,7 @@ SET money       = CASE
 WHERE id = :id;
 ```
 
-### Delete
+### 删除
 
 ```sql
 DELETE

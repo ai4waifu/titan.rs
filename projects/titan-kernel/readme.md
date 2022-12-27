@@ -1,5 +1,3 @@
 # titan-kernel
 
-Backend-neutral SSA Kernel IR, ABI verification and candidate contracts. PTX,
-AMDGPU code-object and executable AVX2 generation are roadmap work until their
-hardware/compiler tests pass.
+提供与 backend 无关的 SSA Kernel IR、ABI 验证和候选合同。PTX、AMDGPU code object 和可执行 AVX2 生成在通过硬件/编译器测试前仍属于路线规划能力。

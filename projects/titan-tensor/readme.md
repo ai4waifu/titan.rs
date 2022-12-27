@@ -1,3 +1,3 @@
 # titan-tensor
 
-Statically ranked tensors, CPU MatMul, and a minimal reverse-mode gradient path.
+提供静态 rank tensor、CPU MatMul 和最小 reverse-mode 梯度路径。

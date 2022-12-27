@@ -1,3 +1,3 @@
 # titan-example
 
-An end-to-end CPU training workflow for the Titan.rs framework skeleton.
+用于验证 Titan.rs 框架骨架的端到端 CPU 训练流程。
