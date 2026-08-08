@@ -1,0 +1,10 @@
+[package]
+name = "titan-distributed"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Native distributed training primitives for Titan.rs"
+readme = "readme.md"
+
+[dependencies]

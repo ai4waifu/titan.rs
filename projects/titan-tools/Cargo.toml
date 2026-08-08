@@ -1,0 +1,16 @@
+[package]
+name = "titan-tools"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Titan.rs developer toolchain"
+readme = "readme.md"
+
+[[bin]]
+name = "tt"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+titan-distributed.workspace = true

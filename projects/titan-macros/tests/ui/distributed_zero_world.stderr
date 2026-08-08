@@ -1,0 +1,5 @@
+error: `world` 必须大于零
+ --> tests/ui/distributed_zero_world.rs:3:23
+  |
+3 | #[distributed(world = 0)]
+  |                       ^

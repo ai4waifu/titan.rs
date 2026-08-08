@@ -1,0 +1,15 @@
+[package]
+name = "titan-model"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Model, deployment, and interchange API for Titan.rs"
+readme = "readme.md"
+
+[dependencies]
+titan-hal.workspace = true
+titan-tensor.workspace = true
+titan-runtime.workspace = true
+serde.workspace = true
+serde_json.workspace = true

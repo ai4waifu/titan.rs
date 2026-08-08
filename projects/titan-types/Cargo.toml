@@ -1,0 +1,23 @@
+[package]
+name = "titan-types"
+version.workspace = true
+authors.workspace = true
+description = "..."
+categories = ["rust-patterns"]
+homepage = "https://github.com/oovm/RustTemplate"
+repository = "https://github.com/oovm/RustTemplate"
+documentation = "https://docs.rs/sub_projects"
+readme = "readme.md"
+license.workspace = true
+edition.workspace = true
+exclude = ["package.json", "tests/**"]
+
+[dependencies]
+
+[dev-dependencies]
+
+[features]
+default = []
+
+[package.metadata.docs.rs]
+all-features = true

@@ -1,0 +1,37 @@
+
+@delete_database() {
+
+}
+@delete_column() {
+
+}
+@delete_table() {
+
+}
+@define_table {
+
+}
+
+
+--- action, or do nothing
+@.create_or_replace
+@.create_if_not_exists
+@.owner(bot_user)
+table public.t_user_info {
+	---
+    id: i32 = 0,
+    ---
+    @.range(0, max=10)
+    name: UTF8,
+    ---
+    age: i32,
+    sex: i32,
+    birthday: Date = CURRENT_TIMESTAMP,
+    create_time: DateTime,
+    update_time: DateTimeTz
+}
+
+--- Typed jsonb
+class UserInfo { }
+
+unity A { }

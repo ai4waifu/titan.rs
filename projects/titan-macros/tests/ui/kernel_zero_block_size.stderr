@@ -1,0 +1,5 @@
+error: `block_size` 必须大于零
+ --> tests/ui/kernel_zero_block_size.rs:3:23
+  |
+3 | #[kernel(block_size = 0)]
+  |                       ^

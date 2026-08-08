@@ -1,0 +1,10 @@
+[package]
+name = "titan-profiler"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "In-process telemetry for Titan.rs"
+readme = "readme.md"
+
+[dependencies]
