@@ -13,6 +13,7 @@ mod group_norm;
 mod layer_norm;
 mod quick_gelu;
 mod reduction_sum;
+mod regs;
 mod resize;
 mod silu;
 mod slice;
