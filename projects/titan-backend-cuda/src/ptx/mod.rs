@@ -5,13 +5,11 @@ mod ast;
 mod entries;
 mod validate;
 
-use titan_kernel::{AddressSpace, Instruction as IrInstruction, IrType, KernelAbi, KernelError, KernelModule};
-use titan_types::{BackendId, DType, DeviceFingerprint};
+use titan_kernel::{KernelAbi, KernelError, KernelModule};
+use titan_types::DeviceFingerprint;
 
-use ast::{
-    AddressSize, ElementwiseOperation, Entry, FmaAddend, Identifier, PtxModule, PtxVersion, Target,
-};
 use abi::*;
+use ast::{AddressSize, Entry, Identifier, PtxModule, PtxVersion, Target};
 use validate::validate_entry;
 
 pub(crate) const MINIMUM_SM: u16 = 70;
