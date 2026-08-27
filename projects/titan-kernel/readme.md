@@ -1,3 +1,5 @@
 # titan-kernel
 
-Portable kernel source generation with inspectable PTX, WGSL, HIP, Metal, and CPU IR outputs.
+Backend-neutral SSA Kernel IR, ABI verification and candidate contracts. PTX,
+AMDGPU code-object and executable AVX2 generation are roadmap work until their
+hardware/compiler tests pass.

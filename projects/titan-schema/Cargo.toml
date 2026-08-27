@@ -1,0 +1,12 @@
+[package]
+name = "titan-schema"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Titan operator schemas, references and generated strategy contracts"
+readme = "readme.md"
+
+[dependencies]
+titan-types.workspace = true
+titan-kernel.workspace = true

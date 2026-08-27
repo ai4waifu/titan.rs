@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use titan_distributed::{checksum, CheckpointManifest, Collective, CollectiveError, LocalRing, LocalTransport};
+use titan_distributed::{CheckpointManifest, Collective, CollectiveError, LocalRing, LocalTransport, checksum};
 
 #[test]
 fn sum() {

@@ -38,7 +38,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Ok(bytes) = std::fs::read(&manifest) {
                 println!("checkpoint.checksum={}", checksum(&bytes));
                 println!("checkpoint.recovery=ready");
-            } else {
+            }
+            else {
                 println!("checkpoint.recovery=unavailable");
             }
         }

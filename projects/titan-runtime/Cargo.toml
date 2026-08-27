@@ -9,6 +9,12 @@ readme = "readme.md"
 
 [dependencies]
 titan-hal.workspace = true
+titan-backend-cpu.workspace = true
+titan-backend-cuda.workspace = true
 titan-tensor.workspace = true
 titan-autotune.workspace = true
 titan-profiler.workspace = true
+titan-graph.workspace = true
+titan-kernel.workspace = true
+titan-schema.workspace = true
+titan-types.workspace = true

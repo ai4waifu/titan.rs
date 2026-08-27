@@ -9,3 +9,4 @@ readme = "readme.md"
 
 [dependencies]
 titan-hal.workspace = true
+titan-types.workspace = true

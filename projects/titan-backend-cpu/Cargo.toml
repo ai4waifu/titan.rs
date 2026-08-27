@@ -1,0 +1,12 @@
+[package]
+name = "titan-backend-cpu"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme = "readme.md"
+
+[dependencies]
+titan-hal.workspace = true
+titan-kernel.workspace = true
+titan-types.workspace = true

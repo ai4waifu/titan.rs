@@ -15,3 +15,5 @@ titan-distributed.workspace = true
 titan-kernel.workspace = true
 titan-graph.workspace = true
 titan-model.workspace = true
+titan-types.workspace = true
+titan-backend-cpu.workspace = true

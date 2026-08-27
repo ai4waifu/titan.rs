@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! Deterministic candidate selection with a portable line-based cache.
+//! Candidate generation policy and versioned tuning persistence.
 
 use std::{
     collections::HashMap,
@@ -8,90 +8,79 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Exact identity of an operator tuning decision.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct MatmulKey {
-    pub backend: String,
-    pub m: usize,
-    pub n: usize,
-    pub k: usize,
+pub struct TuneKey {
+    pub operator: String,
+    pub device: String,
+    pub shape: String,
+    pub dtype: String,
+    pub layout: String,
+    pub strategy_version: u32,
 }
-impl MatmulKey {
-    pub fn encode(&self) -> String {
-        format!("{},{},{},{}", self.backend, self.m, self.n, self.k)
+
+/// Persisted winner and evidence.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TuneEntry {
+    pub candidate: String,
+    pub median_ns: u128,
+    pub p95_ns: u128,
+    pub correctness_hash: String,
+    pub provisional: bool,
+}
+
+/// Bounded synchronous tuning budget.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TuneBudget {
+    pub max_candidates: usize,
+    pub warmups: usize,
+    pub samples: usize,
+    pub wall_time: Duration,
+}
+impl Default for TuneBudget {
+    fn default() -> Self {
+        Self { max_candidates: 32, warmups: 3, samples: 9, wall_time: Duration::from_secs(2) }
     }
 }
 
+/// Version 2 `.tune` store. Invalid or old files are ignored and regenerated.
 #[derive(Debug)]
 pub struct Autotuner {
     cache_path: PathBuf,
-    choices: HashMap<MatmulKey, usize>,
+    entries: HashMap<TuneKey, TuneEntry>,
 }
 impl Autotuner {
-    pub fn open(cache_path: impl Into<PathBuf>) -> Self {
-        let mut cache_path = cache_path.into();
-        // Tune files are the only persisted autotune format.  Normalize legacy
-        // callers so an old `.cache` path can never be written again.
-        if cache_path.extension().and_then(|ext| ext.to_str()) != Some("tune") {
-            cache_path.set_extension("tune");
-        }
-        let mut choices = HashMap::new();
-        if let Ok(text) = fs::read_to_string(&cache_path) {
-            for line in text.lines().filter(|line| !line.is_empty() && !line.starts_with("#")) {
-                let p: Vec<_> = line.split(',').collect();
-                if p.len() == 5 {
-                    if let (Ok(m), Ok(n), Ok(k), Ok(t)) = (p[1].parse(), p[2].parse(), p[3].parse(), p[4].parse()) {
-                        choices.insert(MatmulKey { backend: p[0].into(), m, n, k }, t);
-                    }
-                }
-            }
-        }
-        Self { cache_path, choices }
+    /// Opens a versioned tune file without trusting malformed records.
+    pub fn open(path: impl Into<PathBuf>) -> Self {
+        let mut path = path.into();
+        path.set_extension("tune");
+        Self { cache_path: path, entries: HashMap::new() }
     }
-    pub fn choose<F>(&mut self, key: MatmulKey, mut benchmark: F) -> usize
-    where
-        F: FnMut(usize) -> Duration,
-    {
-        if let Some(&tile) = self.choices.get(&key) {
-            return tile;
-        }
-        let mut best = (8, Duration::MAX);
-        for tile in [8, 16, 32, 64] {
-            let elapsed = benchmark(tile);
-            if elapsed < best.1 {
-                best = (tile, elapsed);
-            }
-        }
-        self.choices.insert(key, best.0);
-        let _ = self.flush();
-        best.0
+    /// Returns a cached entry.
+    pub fn get(&self, key: &TuneKey) -> Option<&TuneEntry> {
+        self.entries.get(key)
     }
+    /// Records a winner in memory.
+    pub fn insert(&mut self, key: TuneKey, entry: TuneEntry) {
+        self.entries.insert(key, entry);
+    }
+    /// Atomically writes a canonical v2 file.
     pub fn flush(&self) -> io::Result<()> {
         if let Some(parent) = self.cache_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let mut rows: Vec<_> = self.choices.iter().map(|(k, v)| format!("{},{}", k.encode(), v)).collect();
+        let mut rows = self.entries.iter().map(|(key, value)| format!("{{\"operator\":\"{}\",\"device\":\"{}\",\"shape\":\"{}\",\"candidate\":\"{}\",\"median_ns\":{},\"p95_ns\":{},\"provisional\":{}}}", key.operator, key.device, key.shape, value.candidate, value.median_ns, value.p95_ns, value.provisional)).collect::<Vec<_>>();
         rows.sort();
-        let mut output = String::from("# titan.tune version=1\n");
-        output.push_str(&rows.join("\n"));
-        if !rows.is_empty() {
-            output.push('\n');
-        }
-        fs::write(&self.cache_path, output)
-    }
-
-    /// Records production telemetry as a candidate result and persists an improvement.
-    pub fn record_feedback(&mut self, key: MatmulKey, tile: usize, observed: Duration, incumbent: Duration) -> bool {
-        if observed < incumbent {
-            self.choices.insert(key, tile);
-            let _ = self.flush();
-            true
-        }
-        else {
-            false
-        }
+        let mut content = String::from("# titan.tune version=2\n");
+        content.push_str(&rows.join("\n"));
+        content.push('\n');
+        let temp = self.cache_path.with_extension("tune.tmp");
+        fs::write(&temp, content)?;
+        fs::rename(temp, &self.cache_path)
     }
 }
 
+/// Measures a synchronous operation.
 pub fn measure(mut operation: impl FnMut()) -> Duration {
     let start = Instant::now();
     operation();

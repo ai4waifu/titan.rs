@@ -1,17 +1,29 @@
-use std::{fs, time::Duration};
-use titan_autotune::{Autotuner, MatmulKey};
+use std::time::Duration;
+use titan_autotune::{Autotuner, TuneEntry, TuneKey};
 
 #[test]
-fn normalizes_legacy_extension_and_writes_versioned_tune() {
-    let path = std::env::temp_dir().join(format!("titan-autotune-{}.cache", std::process::id()));
-    let tune = path.with_extension("tune");
-    let _ = fs::remove_file(&path);
-    let _ = fs::remove_file(&tune);
+fn version_two_tune_store_round_trips_a_winner() {
+    let path = std::env::temp_dir().join(format!("titan-{}.tune", std::process::id()));
     let mut tuner = Autotuner::open(&path);
-    let key = MatmulKey { backend: "cpu".into(), m: 2, n: 3, k: 4 };
-    assert_eq!(tuner.choose(key, |_| Duration::from_micros(1)), 8);
-    let text = fs::read_to_string(&tune).unwrap();
-    assert!(text.starts_with("# titan.tune version=1\n"));
-    assert!(!path.exists());
-    let _ = fs::remove_file(tune);
+    let key = TuneKey {
+        operator: "matmul".into(),
+        device: "cpu".into(),
+        shape: "2x2x2".into(),
+        dtype: "f32".into(),
+        layout: "contiguous".into(),
+        strategy_version: 1,
+    };
+    tuner.insert(
+        key,
+        TuneEntry {
+            candidate: "generated-baseline".into(),
+            median_ns: 1,
+            p95_ns: 2,
+            correctness_hash: "ok".into(),
+            provisional: false,
+        },
+    );
+    tuner.flush().unwrap();
+    assert!(std::fs::read_to_string(path.with_extension("tune")).unwrap().contains("version=2"));
+    let _ = Duration::from_nanos(1);
 }

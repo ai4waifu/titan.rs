@@ -1,0 +1,11 @@
+[package]
+name = "titan-backend-rocm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme = "readme.md"
+
+[dependencies]
+titan-hal.workspace = true
+titan-types.workspace = true
