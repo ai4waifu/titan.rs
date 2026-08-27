@@ -9,9 +9,10 @@ use titan_backend_cuda::{
     broadcast_add_f32_abi as cuda_broadcast_add_abi, concat_f32_abi as cuda_concat_abi, conv2d_f32_abi as cuda_conv2d_abi,
     elementwise_add_f32_abi as cuda_add_abi, gelu_f32_abi as cuda_gelu_abi, gemm_f32_abi as cuda_gemm_abi,
     group_norm_f32_abi as cuda_group_norm_abi, layer_norm_f32_abi as cuda_layer_norm_abi,
-    reduction_sum_f32_abi as cuda_reduction_sum_abi, resize_nearest2d_f32_abi as cuda_resize_nearest2d_abi,
-    scaled_dot_product_attention_f32_abi as cuda_attention_abi, silu_f32_abi as cuda_silu_abi, slice_f32_abi as cuda_slice_abi,
-    softmax_f32_abi as cuda_softmax_abi, transpose_f32_abi as cuda_transpose_abi,
+    quick_gelu_f32_abi as cuda_quick_gelu_abi, reduction_sum_f32_abi as cuda_reduction_sum_abi,
+    resize_nearest2d_f32_abi as cuda_resize_nearest2d_abi, scaled_dot_product_attention_f32_abi as cuda_attention_abi,
+    silu_f32_abi as cuda_silu_abi, slice_f32_abi as cuda_slice_abi, softmax_f32_abi as cuda_softmax_abi,
+    transpose_f32_abi as cuda_transpose_abi,
 };
 use titan_graph::{Graph, OpRequest};
 use titan_hal::LaunchGeometry;
@@ -293,6 +294,15 @@ fn cuda_gelu_ir(abi: KernelAbi) -> KernelModule {
     }
 }
 
+fn cuda_quick_gelu_ir(abi: KernelAbi) -> KernelModule {
+    KernelModule {
+        kernel_id: KernelId("quick_gelu.f32".into()),
+        entry: BlockId(0),
+        blocks: vec![BasicBlock { id: BlockId(0), params: vec![], instructions: vec![] }],
+        abi,
+    }
+}
+
 fn cuda_softmax_ir(abi: KernelAbi) -> KernelModule {
     KernelModule {
         kernel_id: KernelId("softmax.f32".into()),
@@ -429,6 +439,17 @@ fn float_attr(attrs: &titan_types::AttrMap, key: &str, default: Option<f32>) -> 
     }
 }
 
+fn quick_gelu_slope(attrs: &titan_types::AttrMap) -> Result<f32, String> {
+    if attrs.keys().any(|key| key != "slope") {
+        return Err("QuickGELU only accepts the slope attribute".into());
+    }
+    let slope = float_attr(attrs, "slope", Some(1.702))?;
+    if !slope.is_finite() || slope <= 0.0 {
+        return Err("QuickGELU slope must be finite and positive".into());
+    }
+    Ok(slope)
+}
+
 fn broadcast_add(inputs: &[Vec<f32>], shapes: &[Vec<usize>], output_shape: &[usize]) -> Result<Vec<f32>, String> {
     if inputs.len() != 2 || shapes.len() != 2 || shapes[0].len() != shapes[1].len() || shapes[0].len() != output_shape.len() {
         return Err("broadcast add requires two inputs with matching ranks".into());
@@ -492,6 +513,10 @@ fn erf_approximation(value: f32) -> f32 {
 
 fn gelu(value: f32) -> f32 {
     0.5 * value * (1.0 + erf_approximation(value * std::f32::consts::FRAC_1_SQRT_2))
+}
+
+fn quick_gelu(value: f32, slope: f32) -> f32 {
+    value * (1.0 / (1.0 + (-slope * value).exp()))
 }
 
 fn resize_nearest2d(input: &[f32], shape: &[usize], output_shape: &[usize]) -> Result<Vec<f32>, String> {
@@ -1041,6 +1066,9 @@ impl Runtime {
         if name == "gelu" && request.inputs.first().is_some_and(|input| input.device().backend == BackendId::Cuda) {
             return self.execute_cuda_gelu(request);
         }
+        if name == "quick_gelu" && request.inputs.first().is_some_and(|input| input.device().backend == BackendId::Cuda) {
+            return self.execute_cuda_quick_gelu(request);
+        }
         if name == "softmax" && request.inputs.first().is_some_and(|input| input.device().backend == BackendId::Cuda) {
             return self.execute_cuda_softmax(request);
         }
@@ -1082,6 +1110,7 @@ impl Runtime {
                 | "broadcast.add"
                 | "silu"
                 | "gelu"
+                | "quick_gelu"
                 | "resize.nearest2d"
                 | "resize_nearest2d"
                 | "layer_norm"
@@ -1239,6 +1268,89 @@ impl Runtime {
                     buffer: output.buffer().unwrap(),
                 },
                 KernelArg::Scalar { dtype: DType::I32, bytes: element_count.to_le_bytes().to_vec() },
+            ])
+            .map_err(|error| hal_execution_error(&operator, &source, "abi", error.to_string()))?;
+        let kernel = session
+            .load(&compiled.bytes, &compiled.abi.abi_hash(), compiled.metadata.clone())
+            .map_err(|error| hal_execution_error(&operator, &source, "load", error.to_string()))?;
+        let stream =
+            session.create_stream().map_err(|error| hal_execution_error(&operator, &source, "stream", error.to_string()))?;
+        let block = compiled.metadata.block[0].max(1);
+        let geometry = LaunchGeometry {
+            grid: [numel(&output_shape).div_ceil(block as usize) as u32, 1, 1],
+            block: compiled.metadata.block,
+            shared_bytes: compiled.metadata.shared_bytes,
+        };
+        let event = session
+            .launch(stream.as_ref(), kernel.as_ref(), &args, &geometry)
+            .map_err(|error| hal_execution_error(&operator, &source, "launch", error.to_string()))?;
+        session.wait(event.as_ref()).map_err(|error| hal_execution_error(&operator, &source, "event", error.to_string()))?;
+        Ok(ExecutionHandle { outputs: vec![output], candidate: CandidateId("cuda/driver".into()), kernel: kernel_id })
+    }
+
+    fn execute_cuda_quick_gelu(&mut self, request: OpRequest) -> Result<ExecutionHandle, ExecutionError> {
+        let operator = request.operator.clone();
+        let source = request.source.clone();
+        let fail = |phase, message| ExecutionError { operator: operator.clone(), source: source.clone(), phase, message };
+        if request.inputs.len() != 1 || request.outputs.len() != 1 {
+            return Err(fail("contract", "CUDA QuickGELU requires exactly one input and one output".into()));
+        }
+        let slope = quick_gelu_slope(&request.attrs).map_err(|message| fail("contract", message))?;
+        let input = &request.inputs[0];
+        let output_spec = &request.outputs[0];
+        if input.dtype() != DType::F32 || output_spec.dtype != DType::F32 {
+            return Err(fail("contract", "CUDA QuickGELU requires F32 input and output".into()));
+        }
+        if input.device().backend != BackendId::Cuda {
+            return Err(fail("contract", "CUDA QuickGELU requires a CUDA input device".into()));
+        }
+        if !is_contiguous(input.shape(), input.strides()) {
+            return Err(fail("contract", "CUDA QuickGELU requires a contiguous input".into()));
+        }
+        let output_shape = output_spec
+            .shape
+            .0
+            .iter()
+            .map(|dimension| usize::try_from(*dimension))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| fail("contract", "CUDA QuickGELU output shape exceeds host usize".into()))?;
+        if output_shape != input.shape()
+            || output_spec.layout != titan_types::Layout::Contiguous
+            || output_spec.strides.0 != contiguous_strides(&output_shape)
+        {
+            return Err(fail(
+                "contract",
+                "CUDA QuickGELU requires a contiguous output with the same shape as the input".into(),
+            ));
+        }
+        let session = input.session().ok_or_else(|| fail("contract", "CUDA QuickGELU input has no backend storage".into()))?;
+        let output = TensorHandle::allocate_f32(session.clone(), output_shape.clone())
+            .map_err(|error| hal_execution_error(&operator, &source, "allocate", error.to_string()))?;
+        let kernel_id = KernelId("quick_gelu.f32".into());
+        let compiled = self
+            .cached_cuda_quick_gelu_artifact(session.fingerprint(), &kernel_id)
+            .map_err(|message| hal_execution_error(&operator, &source, "compile", message))?;
+        let element_count = i32::try_from(numel(&output_shape))
+            .map_err(|_| fail("contract", "CUDA QuickGELU element count exceeds i32 ABI".into()))?;
+        let args = compiled
+            .abi
+            .encode(&vec![
+                KernelArg::Buffer {
+                    slot: 0,
+                    dtype: DType::F32,
+                    writable: false,
+                    alignment: 4,
+                    buffer: input.buffer().unwrap(),
+                },
+                KernelArg::Buffer {
+                    slot: 1,
+                    dtype: DType::F32,
+                    writable: true,
+                    alignment: 4,
+                    buffer: output.buffer().unwrap(),
+                },
+                KernelArg::Scalar { dtype: DType::I32, bytes: element_count.to_le_bytes().to_vec() },
+                KernelArg::Scalar { dtype: DType::F32, bytes: slope.to_le_bytes().to_vec() },
             ])
             .map_err(|error| hal_execution_error(&operator, &source, "abi", error.to_string()))?;
         let kernel = session
@@ -2731,6 +2843,7 @@ impl Runtime {
                 | "softmax"
                 | "silu"
                 | "gelu"
+                | "quick_gelu"
                 | "resize.nearest2d"
                 | "resize_nearest2d"
         ) && request.inputs.len() != 1
@@ -2810,6 +2923,11 @@ impl Runtime {
             "silu" => unary_same_shape(&values[0], &shapes[0], &out_shape, "silu", |value| value / (1.0 + (-value).exp()))
                 .map_err(fail)?,
             "gelu" => unary_same_shape(&values[0], &shapes[0], &out_shape, "gelu", gelu).map_err(fail)?,
+            "quick_gelu" => {
+                let slope = quick_gelu_slope(&request.attrs).map_err(fail)?;
+                unary_same_shape(&values[0], &shapes[0], &out_shape, "quick_gelu", |value| quick_gelu(value, slope))
+                    .map_err(fail)?
+            }
             "resize.nearest2d" | "resize_nearest2d" => resize_nearest2d(&values[0], &shapes[0], &out_shape).map_err(fail)?,
             "layer_norm" | "layer.norm" => layer_norm(&values, &shapes, &request.attrs, &out_shape).map_err(fail)?,
             "group_norm" | "group.norm" => group_norm(&values, &shapes, &request.attrs, &out_shape).map_err(fail)?,
@@ -2993,6 +3111,29 @@ impl Runtime {
         self.cache_misses += 1;
         let artifact =
             CudaCompiler.compile_artifact(&cuda_gelu_ir(abi.clone()), &abi, fingerprint).map_err(|error| error.to_string())?;
+        let cached = CachedArtifact { bytes: artifact.ptx().to_vec(), abi, metadata: artifact.metadata().clone() };
+        self.artifacts.insert(key, cached.clone());
+        Ok(cached)
+    }
+
+    fn cached_cuda_quick_gelu_artifact(
+        &mut self,
+        fingerprint: &DeviceFingerprint,
+        kernel_id: &KernelId,
+    ) -> Result<CachedArtifact, String> {
+        if fingerprint.device.backend != BackendId::Cuda {
+            return Err("CUDA QuickGELU artifact requested for a non-CUDA session".into());
+        }
+        let abi = cuda_quick_gelu_abi();
+        let key = ArtifactCacheKey { kernel: kernel_id.clone(), abi_hash: abi.abi_hash(), device: fingerprint.clone() };
+        if let Some(artifact) = self.artifacts.get(&key) {
+            self.cache_hits += 1;
+            return Ok(artifact.clone());
+        }
+        self.cache_misses += 1;
+        let artifact = CudaCompiler
+            .compile_artifact(&cuda_quick_gelu_ir(abi.clone()), &abi, fingerprint)
+            .map_err(|error| error.to_string())?;
         let cached = CachedArtifact { bytes: artifact.ptx().to_vec(), abi, metadata: artifact.metadata().clone() };
         self.artifacts.insert(key, cached.clone());
         Ok(cached)

@@ -449,6 +449,21 @@ fn cpu_reference_broadcast_add_silu_gelu_and_nearest_resize_are_numerically_corr
 }
 
 #[test]
+fn cpu_reference_quick_gelu_matches_the_backend_neutral_formula_for_default_and_custom_slopes() {
+    let d = device();
+    let values = [-3.0f32, -1.0, 0.0, 1.0, 3.0];
+
+    for (attrs, slope) in [(AttrMap::new(), 1.702f32), (attrs(&[("slope", float(1.25))]), 1.25f32)] {
+        let input = Tensor::<f32, 1>::from_slice(&d, [5], &values).unwrap();
+        let actual = run(request("quick_gelu", vec![input.handle()], vec![5], attrs)).unwrap();
+        for (index, (actual, input)) in actual.iter().zip(values).enumerate() {
+            let expected = input * (1.0 / (1.0 + (-slope * input).exp()));
+            assert!((actual - expected).abs() <= 1e-6, "index {index}: actual={actual} expected={expected} slope={slope}");
+        }
+    }
+}
+
+#[test]
 fn cpu_reference_broadcast_activation_and_resize_reject_invalid_contracts() {
     let d = device();
     let lhs = Tensor::<f32, 2>::from_slice(&d, [2, 2], &[1., 2., 3., 4.]).unwrap();
@@ -474,6 +489,25 @@ fn cpu_reference_broadcast_activation_and_resize_reject_invalid_contracts() {
     let mut gelu_layout = request("gelu", vec![activation.handle()], vec![2], AttrMap::new());
     gelu_layout.outputs[0].layout = Layout::Strided;
     assert!(run(gelu_layout).unwrap_err().message.contains("contiguous"));
+
+    assert!(
+        run(request("quick_gelu", vec![activation.handle()], vec![1, 2], AttrMap::new()))
+            .unwrap_err()
+            .message
+            .contains("shape")
+    );
+    assert!(
+        run(request("quick_gelu", vec![activation.handle()], vec![2], attrs(&[("slope", float(0.0))])))
+            .unwrap_err()
+            .message
+            .contains("positive")
+    );
+    assert!(
+        run(request("quick_gelu", vec![activation.handle()], vec![2], attrs(&[("approximation", float(1.702))])))
+            .unwrap_err()
+            .message
+            .contains("only accepts")
+    );
 
     let rank_three = Tensor::<f32, 3>::from_slice(&d, [1, 2, 2], &[1., 2., 3., 4.]).unwrap();
     assert!(

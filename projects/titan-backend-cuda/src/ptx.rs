@@ -86,6 +86,11 @@ pub(super) fn lower(ir: &KernelModule, abi: &KernelAbi, fingerprint: &DeviceFing
         validate_gelu_ir(ir)?;
         Entry::gelu_f32(entry_name.clone())
     }
+    else if ir.kernel_id.0 == "quick_gelu.f32" {
+        validate_quick_gelu_abi(ir, abi)?;
+        validate_quick_gelu_ir(ir)?;
+        Entry::quick_gelu_f32(entry_name.clone())
+    }
     else if ir.kernel_id.0 == "softmax.f32" {
         validate_softmax_abi(ir, abi)?;
         validate_softmax_ir(ir)?;
@@ -298,6 +303,32 @@ fn validate_gelu_ir(ir: &KernelModule) -> Result<(), KernelError> {
         || !ir.blocks[0].instructions.is_empty()
     {
         return Err(KernelError::Unsupported("CUDA GELU lowering requires the canonical empty gelu.f32 IR entry block".into()));
+    }
+    Ok(())
+}
+
+fn validate_quick_gelu_abi(ir: &KernelModule, abi: &KernelAbi) -> Result<(), KernelError> {
+    if &ir.abi != abi {
+        return Err(KernelError::InvalidAbi("KernelModule ABI and compile ABI differ".into()));
+    }
+    if abi != &super::quick_gelu_f32_abi() {
+        return Err(KernelError::InvalidAbi(
+            "CUDA QuickGELU lowering requires one aligned f32 input buffer, one aligned f32 output buffer, one i32 element-count scalar, and one f32 slope scalar"
+                .into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_quick_gelu_ir(ir: &KernelModule) -> Result<(), KernelError> {
+    if ir.blocks.len() != 1
+        || ir.blocks[0].id != ir.entry
+        || !ir.blocks[0].params.is_empty()
+        || !ir.blocks[0].instructions.is_empty()
+    {
+        return Err(KernelError::Unsupported(
+            "CUDA QuickGELU lowering requires the canonical empty quick_gelu.f32 IR entry block".into(),
+        ));
     }
     Ok(())
 }
@@ -889,6 +920,10 @@ enum PtxInstruction {
         done: Label,
         negative: Label,
         signed_done: Label,
+    },
+    QuickGeluF32 {
+        parameters: [Identifier; 4],
+        done: Label,
     },
     SoftmaxF32 {
         parameters: [Identifier; 4],
@@ -1522,6 +1557,36 @@ impl fmt::Display for PtxInstruction {
                 input = parameters[0],
                 output = parameters[1],
                 count = parameters[2],
+            ),
+            Self::QuickGeluF32 { parameters, done } => write!(
+                formatter,
+                "ld.param.u64 %rd1, [{input}];\n\
+                 ld.param.u64 %rd2, [{output}];\n\
+                 ld.param.u32 %r1, [{count}];\n\
+                 ld.param.f32 %f2, [{slope}];\n\
+                 mov.u32 %r2, %ctaid.x;\n\
+                 mov.u32 %r3, %ntid.x;\n\
+                 mov.u32 %r4, %tid.x;\n\
+                 mad.lo.s32 %r5, %r2, %r3, %r4;\n\
+                 setp.ge.u32 %p1, %r5, %r1;\n\
+                 @%p1 bra {done};\n\
+                 mul.wide.u32 %rd3, %r5, 4;\n\
+                 add.s64 %rd4, %rd1, %rd3;\n\
+                 add.s64 %rd5, %rd2, %rd3;\n\
+                 ld.global.f32 %f1, [%rd4];\n\
+                 mul.rn.f32 %f3, %f1, %f2;\n\
+                 sub.rn.f32 %f3, 0f00000000, %f3;\n\
+                 mul.rn.f32 %f3, %f3, 0f3FB8AA3B;\n\
+                 ex2.approx.f32 %f3, %f3;\n\
+                 add.rn.f32 %f3, %f3, 0f3F800000;\n\
+                 div.rn.f32 %f3, %f1, %f3;\n\
+                 st.global.f32 [%rd5], %f3;\n\
+                 {done}:\n\
+                 ret;",
+                input = parameters[0],
+                output = parameters[1],
+                count = parameters[2],
+                slope = parameters[3],
             ),
             Self::SoftmaxF32 { parameters, done, max_loop, max_done, sum_loop, sum_done, normalize_loop } => write!(
                 formatter,
@@ -2212,6 +2277,37 @@ impl Entry {
                 negative: Label(name.suffix("_negative")),
                 signed_done: Label(name.suffix("_signed_done")),
             }],
+        }
+    }
+
+    fn quick_gelu_f32(name: Identifier) -> Self {
+        let parameter_names = std::array::from_fn(|index| name.parameter(ParameterIndex(index as u8)));
+        let parameters = parameter_names
+            .iter()
+            .enumerate()
+            .map(|(index, parameter)| Parameter {
+                name: parameter.clone(),
+                kind: if index < 2 {
+                    ParameterKind::GlobalF32Pointer
+                }
+                else if index == 2 {
+                    ParameterKind::U32
+                }
+                else {
+                    ParameterKind::F32
+                },
+            })
+            .collect();
+        Self {
+            name: name.clone(),
+            parameters,
+            registers: vec![
+                RegisterDeclaration { class: RegisterClass::Predicate, count: NonZeroU8::new(2).unwrap() },
+                RegisterDeclaration { class: RegisterClass::B32, count: NonZeroU8::new(6).unwrap() },
+                RegisterDeclaration { class: RegisterClass::B64, count: NonZeroU8::new(6).unwrap() },
+                RegisterDeclaration { class: RegisterClass::F32, count: NonZeroU8::new(4).unwrap() },
+            ],
+            instructions: vec![PtxInstruction::QuickGeluF32 { parameters: parameter_names, done: Label(name.suffix("_done")) }],
         }
     }
 
