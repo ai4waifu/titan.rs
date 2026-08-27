@@ -1,5 +1,7 @@
 use titan_backend_cuda::{CudaCompiler, elementwise_add_f32_abi, gemm_f32_abi, silu_f32_abi};
-use titan_kernel::{AddressSpace, BasicBlock, BlockId, Instruction, IrType, KernelAbi, KernelError, KernelModule, TargetCompiler, ValueId};
+use titan_kernel::{
+    AddressSpace, BasicBlock, BlockId, Instruction, IrType, KernelAbi, KernelError, KernelModule, TargetCompiler, ValueId,
+};
 use titan_types::{BackendId, DType, DeviceFingerprint, DeviceId, KernelId};
 
 fn fingerprint(capability_revision: &str) -> DeviceFingerprint {
@@ -102,5 +104,8 @@ fn lowering_rejects_invalid_abi_non_global_pointer_and_old_target() {
     non_global.blocks[0].instructions[0].1 =
         Instruction::Parameter { index: 0, ty: IrType::Pointer { address_space: AddressSpace::Shared, dtype: DType::F32 } };
     assert!(matches!(CudaCompiler.compile(&non_global, &abi, &fingerprint("sm_86")), Err(KernelError::Unsupported(_))));
-    assert!(matches!(CudaCompiler.compile(&add_ir(abi.clone()), &abi, &fingerprint("sm_61")), Err(KernelError::Unsupported(_))));
+    assert!(matches!(
+        CudaCompiler.compile(&add_ir(abi.clone()), &abi, &fingerprint("sm_61")),
+        Err(KernelError::Unsupported(_))
+    ));
 }

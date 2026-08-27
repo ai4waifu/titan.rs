@@ -27,7 +27,8 @@ impl PtxArtifact {
             if nul + 1 != ptx.len() {
                 return Err("PTX artifact contains an interior NUL byte");
             }
-        } else {
+        }
+        else {
             ptx.push(0);
         }
         if !ptx[..ptx.len() - 1].windows(b".version".len()).any(|window| window == b".version") {
@@ -82,63 +83,78 @@ pub(super) fn lower(ir: &KernelModule, abi: &KernelAbi, fingerprint: &DeviceFing
         validate_gemm_abi(ir, abi)?;
         validate_gemm_ir(ir)?;
         Entry::gemm_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "conv2d.f32" {
+    }
+    else if ir.kernel_id.0 == "conv2d.f32" {
         validate_conv2d_abi(ir, abi)?;
         validate_conv2d_ir(ir)?;
         Entry::conv2d_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "scaled_dot_product_attention.f32" {
+    }
+    else if ir.kernel_id.0 == "scaled_dot_product_attention.f32" {
         validate_attention_abi(ir, abi)?;
         validate_attention_ir(ir)?;
         Entry::scaled_dot_product_attention_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "broadcast.add.f32" {
+    }
+    else if ir.kernel_id.0 == "broadcast.add.f32" {
         validate_broadcast_add_abi(ir, abi)?;
         validate_broadcast_add_ir(ir)?;
         Entry::broadcast_add_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "silu.f32" {
+    }
+    else if ir.kernel_id.0 == "silu.f32" {
         validate_silu_abi(ir, abi)?;
         validate_silu_ir(ir)?;
         Entry::silu_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "gelu.f32" {
+    }
+    else if ir.kernel_id.0 == "gelu.f32" {
         validate_gelu_abi(ir, abi)?;
         validate_gelu_ir(ir)?;
         Entry::gelu_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "quick_gelu.f32" {
+    }
+    else if ir.kernel_id.0 == "quick_gelu.f32" {
         validate_quick_gelu_abi(ir, abi)?;
         validate_quick_gelu_ir(ir)?;
         Entry::quick_gelu_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "softmax.f32" {
+    }
+    else if ir.kernel_id.0 == "softmax.f32" {
         validate_softmax_abi(ir, abi)?;
         validate_softmax_ir(ir)?;
         Entry::softmax_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "reduction.sum.f32" {
+    }
+    else if ir.kernel_id.0 == "reduction.sum.f32" {
         validate_reduction_sum_abi(ir, abi)?;
         validate_reduction_sum_ir(ir)?;
         Entry::reduction_sum_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "concat.f32" {
+    }
+    else if ir.kernel_id.0 == "concat.f32" {
         validate_concat_abi(ir, abi)?;
         validate_concat_ir(ir)?;
         Entry::concat_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "transpose.f32" {
+    }
+    else if ir.kernel_id.0 == "transpose.f32" {
         validate_transpose_abi(ir, abi)?;
         validate_transpose_ir(ir)?;
         Entry::transpose_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "slice.f32" {
+    }
+    else if ir.kernel_id.0 == "slice.f32" {
         validate_slice_abi(ir, abi)?;
         validate_slice_ir(ir)?;
         Entry::slice_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "resize.nearest2d.f32" {
+    }
+    else if ir.kernel_id.0 == "resize.nearest2d.f32" {
         validate_resize_nearest2d_abi(ir, abi)?;
         validate_resize_nearest2d_ir(ir)?;
         Entry::resize_nearest2d_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "layer_norm.f32" {
+    }
+    else if ir.kernel_id.0 == "layer_norm.f32" {
         validate_layer_norm_abi(ir, abi)?;
         validate_layer_norm_ir(ir)?;
         Entry::layer_norm_f32(entry_name.clone())
-    } else if ir.kernel_id.0 == "group_norm.f32" {
+    }
+    else if ir.kernel_id.0 == "group_norm.f32" {
         validate_group_norm_abi(ir, abi)?;
         validate_group_norm_ir(ir)?;
         Entry::group_norm_f32(entry_name.clone())
-    } else {
+    }
+    else {
         validate_abi(ir, abi)?;
         reject_non_global_pointers(ir)?;
         let operation = validate_elementwise_ir(ir)?;
@@ -151,4 +167,3 @@ pub(super) fn lower(ir: &KernelModule, abi: &KernelAbi, fingerprint: &DeviceFing
         .map_err(|detail| KernelError::Compile(format!("typed PTX emitter produced invalid artifact: {detail}")))?;
     Ok(LoweredPtx { artifact, entry: entry_name })
 }
-

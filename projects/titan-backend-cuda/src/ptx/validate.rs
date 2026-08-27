@@ -43,10 +43,7 @@ fn class_slot(class: RegisterClass) -> usize {
 fn check_reg(register: Register, counts: &[u8; 4]) -> Result<(), KernelError> {
     let count = counts[class_slot(register.class)];
     if register.index.get() > count {
-        return Err(KernelError::Compile(format!(
-            "PTX register {} exceeds declared count {count}",
-            register
-        )));
+        return Err(KernelError::Compile(format!("PTX register {} exceeds declared count {count}", register)));
     }
     Ok(())
 }
@@ -58,11 +55,7 @@ fn check_u32(value: U32Value, counts: &[u8; 4]) -> Result<(), KernelError> {
     }
 }
 
-fn check_instruction(
-    instruction: &PtxInstruction,
-    counts: &[u8; 4],
-    labels: &HashSet<String>,
-) -> Result<(), KernelError> {
+fn check_instruction(instruction: &PtxInstruction, counts: &[u8; 4], labels: &HashSet<String>) -> Result<(), KernelError> {
     match instruction {
         PtxInstruction::LoadParameterU64 { destination, .. }
         | PtxInstruction::LoadParameterU32 { destination, .. }
@@ -164,7 +157,8 @@ fn check_f32(value: super::ast::F32Value, counts: &[u8; 4]) -> Result<(), Kernel
 fn require_label(name: &str, labels: &HashSet<String>) -> Result<(), KernelError> {
     if labels.contains(name) {
         Ok(())
-    } else {
+    }
+    else {
         Err(KernelError::Compile(format!("PTX branch target `{name}` has no DefineLabel")))
     }
 }

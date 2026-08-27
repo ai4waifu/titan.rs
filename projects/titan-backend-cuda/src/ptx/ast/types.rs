@@ -214,7 +214,8 @@ impl fmt::Display for Entry {
             write!(formatter, "    {parameter}")?;
             if index + 1 != self.parameters.len() {
                 writeln!(formatter, ",")?;
-            } else {
+            }
+            else {
                 writeln!(formatter)?;
             }
         }
