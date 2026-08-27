@@ -19,6 +19,10 @@ Backend trait 分为四组：
 4. ROCm：复用 graph/ABI/autotune 语义并接入 HIP/RCCL。
 5. Metal：实现 Apple 设备能力和 Metal shader lowering。
 
+## CUDA PTX lowering
+
+CUDA 后端的 PTX 只允许通过原子、带类型的 `PtxInstruction` emitter 生成：每条指令的 `Display` 输出一行 PTX。Lowering 不得再使用多行字符串模板拼装内核体；宏算子（GEMM、Conv2d、归一化等）必须展开为原子指令序列后再 stringify。
+
 ## eager CPU 基线
 
 `titan-tensor` 的连续 `f32` eager 算子是后端实现的数值基线。CPU 版本 materialize 连续 row-major 输出，并对 Conv2d、GroupNorm、softmax、layer norm、nearest resize、concat 与广播给出结构化 shape 错误。任一新后端的 kernel 必须在相同输入、参数及 NaN/Inf 策略下匹配这些契约；性能优化不得改变其索引、group 或归一化范围。
