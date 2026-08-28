@@ -1,7 +1,7 @@
 use super::{
-    super::ast::{Entry, F32Value, Identifier, Label, PtxInstruction, U32Value},
+    super::ast::{Entry, F32Value, Identifier, PtxInstruction, U32Value},
     params::{ParamLoad, buffer_u32_params, load_params, named_params, regs},
-    prologue::{bounds_guard, done_label, entry_tail, linear_tid},
+    prologue::{bounds_guard, done_label, entry_tail, kernel_label, linear_tid},
     regs::{b32, b64, f32, predicate},
 };
 
@@ -9,14 +9,14 @@ pub(super) fn conv2d_f32(name: Identifier) -> Entry {
     let names = named_params::<21>(&name);
     let parameters = buffer_u32_params(&names, 4);
     let done = done_label(&name);
-    let no_bias = Label(name.suffix("_no_bias"));
-    let input_channel_loop = Label(name.suffix("_input_channel_loop"));
-    let kernel_h_loop = Label(name.suffix("_kernel_h_loop"));
-    let kernel_w_loop = Label(name.suffix("_kernel_w_loop"));
-    let next_kernel_w = Label(name.suffix("_next_kernel_w"));
-    let kernel_w_done = Label(name.suffix("_kernel_w_done"));
-    let kernel_h_done = Label(name.suffix("_kernel_h_done"));
-    let input_channel_done = Label(name.suffix("_input_channel_done"));
+    let no_bias = kernel_label(&name, "_no_bias");
+    let input_channel_loop = kernel_label(&name, "_input_channel_loop");
+    let kernel_h_loop = kernel_label(&name, "_kernel_h_loop");
+    let kernel_w_loop = kernel_label(&name, "_kernel_w_loop");
+    let next_kernel_w = kernel_label(&name, "_next_kernel_w");
+    let kernel_w_done = kernel_label(&name, "_kernel_w_done");
+    let kernel_h_done = kernel_label(&name, "_kernel_h_done");
+    let input_channel_done = kernel_label(&name, "_input_channel_done");
     let mut instructions = load_params(
         &names,
         &[

@@ -1,7 +1,7 @@
 use super::{
-    super::ast::{Entry, F32Value, Identifier, Label, PtxInstruction, U32Value},
+    super::ast::{Entry, F32Value, Identifier, PtxInstruction, U32Value},
     params::{ParamLoad, buffer_u32_params, load_params, named_params, regs},
-    prologue::{bounds_guard, done_label, entry_tail, linear_f32_ptrs, linear_tid},
+    prologue::{bounds_guard, done_label, entry_tail, kernel_label, linear_f32_ptrs, linear_f32_store, linear_tid},
     regs::{b32, b64, f32, predicate},
 };
 
@@ -9,8 +9,8 @@ pub(super) fn gemm_f32(name: Identifier) -> Entry {
     let names = named_params::<6>(&name);
     let parameters = buffer_u32_params(&names, 3);
     let done = done_label(&name);
-    let done_store = Label(name.suffix("_done_store"));
-    let loop_label = Label(name.suffix("_k_loop"));
+    let done_store = kernel_label(&name, "_done_store");
+    let loop_label = kernel_label(&name, "_k_loop");
     let mut instructions = load_params(
         &names,
         &[ParamLoad::Ptr(1), ParamLoad::Ptr(2), ParamLoad::Ptr(3), ParamLoad::U32(1), ParamLoad::U32(2), ParamLoad::U32(3)],
@@ -45,9 +45,7 @@ pub(super) fn gemm_f32(name: Identifier) -> Entry {
         PtxInstruction::DefineLabel(done_store),
     ]);
     instructions.extend(linear_f32_ptrs(7, 8, &[(3, 9)]));
-    instructions.extend([
-        PtxInstruction::StoreGlobalF32 { pointer: b64(9), value: f32(1) },
-    ]);
+    instructions.push(linear_f32_store(9, 1));
     instructions.extend(entry_tail(&done));
     Entry { name, parameters, registers: regs(3, 14, 10, 4), instructions }
 }
