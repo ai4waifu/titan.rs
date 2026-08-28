@@ -1,14 +1,14 @@
 use super::{
-    super::ast::{Entry, Identifier, Label, PtxInstruction, U32Value},
+    super::ast::{Entry, Identifier, PtxInstruction, U32Value},
     params::{ParamLoad, buffer_u32_params, load_params, named_params, regs},
-    prologue::{bounds_guard, linear_tid},
+    prologue::{bounds_guard, done_label, entry_tail, f32_byte_offsets, linear_tid, ptr_plus_offset},
     regs::{b32, b64, f32},
 };
 
 pub(super) fn resize_nearest2d_f32(name: Identifier) -> Entry {
     let names = named_params::<8>(&name);
     let parameters = buffer_u32_params(&names, 2);
-    let done = Label(name.suffix("_done"));
+    let done = done_label(&name);
     let mut instructions = load_params(
         &names,
         &[
@@ -46,14 +46,14 @@ pub(super) fn resize_nearest2d_f32(name: Identifier) -> Entry {
         PtxInstruction::AddU32 { destination: b32(20), left: b32(20), right: U32Value::Reg(b32(18)) },
         PtxInstruction::MulLoU32 { destination: b32(20), left: b32(20), right: U32Value::Reg(b32(4)) },
         PtxInstruction::AddU32 { destination: b32(20), left: b32(20), right: U32Value::Reg(b32(19)) },
-        PtxInstruction::MultiplyWideU32 { destination: b64(3), left: b32(20), right: 4 },
-        PtxInstruction::MultiplyWideU32 { destination: b64(4), left: b32(10), right: 4 },
-        PtxInstruction::AddS64 { destination: b64(5), left: b64(1), right: b64(3) },
-        PtxInstruction::AddS64 { destination: b64(6), left: b64(2), right: b64(4) },
+    ]);
+    instructions.extend(f32_byte_offsets(&[(20, 3), (10, 4)]));
+    instructions.extend(ptr_plus_offset(3, &[(1, 5)]));
+    instructions.extend(ptr_plus_offset(4, &[(2, 6)]));
+    instructions.extend([
         PtxInstruction::LoadGlobalF32 { destination: f32(1), pointer: b64(5) },
         PtxInstruction::StoreGlobalF32 { pointer: b64(6), value: f32(1) },
-        PtxInstruction::DefineLabel(done),
-        PtxInstruction::Return,
     ]);
+    instructions.extend(entry_tail(&done));
     Entry { name, parameters, registers: regs(2, 21, 7, 2), instructions }
 }

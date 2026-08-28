@@ -1,14 +1,14 @@
 use super::{
     super::ast::{Entry, F32Value, Identifier, Label, PtxInstruction, U32Value},
     params::{ParamLoad, buffer_u32_params, load_params, named_params, regs},
-    prologue::{bounds_guard, linear_tid},
+    prologue::{bounds_guard, done_label, entry_tail, linear_tid},
     regs::{b32, b64, f32, predicate},
 };
 
 pub(super) fn scaled_dot_product_attention_f32(name: Identifier) -> Entry {
     let names = named_params::<9>(&name);
     let parameters = buffer_u32_params(&names, 4);
-    let done = Label(name.suffix("_done"));
+    let done = done_label(&name);
     let max_loop = Label(name.suffix("_max_loop"));
     let max_inner_loop = Label(name.suffix("_max_inner_loop"));
     let max_inner_done = Label(name.suffix("_max_inner_done"));
@@ -184,8 +184,7 @@ pub(super) fn scaled_dot_product_attention_f32(name: Identifier) -> Entry {
         PtxInstruction::MultiplyWideU32 { destination: b64(5), left: b32(9), right: 4 },
         PtxInstruction::AddS64 { destination: b64(6), left: b64(4), right: b64(5) },
         PtxInstruction::StoreGlobalF32 { pointer: b64(6), value: f32(4) },
-        PtxInstruction::DefineLabel(done.clone()),
-        PtxInstruction::Return,
     ]);
+    instructions.extend(entry_tail(&done));
     Entry { name, parameters, registers: regs(2, 23, 9, 8), instructions }
 }
