@@ -236,6 +236,13 @@ impl DeviceSession for Session {
             Err(HalError { operation: "wait", detail: "cross-device event".into() })
         }
     }
+    fn wait_event(&self, stream: &dyn Stream, event: &dyn Event) -> Result<(), HalError> {
+        // CPU streams are synchronous; validating handles is enough to encode the dependency edge.
+        if stream.device() != self.device() {
+            return Err(HalError { operation: "wait_event", detail: "cross-device stream".into() });
+        }
+        self.wait(event)
+    }
 }
 
 fn error(operation: &'static str, detail: impl Into<String>) -> HalError {
@@ -295,6 +302,38 @@ pub fn compile_elementwise_add_f32(fingerprint: &DeviceFingerprint) -> Result<(V
     };
     let artifact = CpuCompiler.compile(&module, &abi, fingerprint)?;
     Ok((artifact, abi))
+}
+
+#[cfg(test)]
+mod wait_event_tests {
+    use super::*;
+    use titan_types::DeviceId;
+
+    #[test]
+    fn wait_event_accepts_cross_stream_upload_dependency() {
+        let driver = CpuDriver;
+        let device = DeviceId { backend: BackendId::Cpu, ordinal: 0 };
+        let session = driver.open(device).expect("open cpu");
+        let upload_stream = session.create_stream().expect("upload stream");
+        let compute_stream = session.create_stream().expect("compute stream");
+        let buffer = session.allocate(16, 4).expect("alloc");
+        let upload_event = session.upload(upload_stream.as_ref(), buffer.as_ref(), &[1u8; 16]).expect("upload");
+        session
+            .wait_event(compute_stream.as_ref(), upload_event.as_ref())
+            .expect("wait_event should encode upload→compute dependency");
+        session.wait(upload_event.as_ref()).expect("host wait");
+    }
+
+    #[test]
+    fn wait_event_rejects_cross_device_stream() {
+        let driver = CpuDriver;
+        let device = DeviceId { backend: BackendId::Cpu, ordinal: 0 };
+        let session = driver.open(device).expect("open cpu");
+        let event = session.create_event().expect("event");
+        let foreign = Arc::new(CpuStream(DeviceId { backend: BackendId::Cpu, ordinal: 1 }));
+        let err = session.wait_event(foreign.as_ref(), event.as_ref()).expect_err("cross-device stream");
+        assert_eq!(err.operation, "wait_event");
+    }
 }
 
 /// CPU backend driver for device ordinal zero.

@@ -60,6 +60,7 @@ type CuEventDestroy = unsafe extern "C" fn(CuEventHandle) -> CuResult;
 type CuEventRecord = unsafe extern "C" fn(CuEventHandle, CuStreamHandle) -> CuResult;
 type CuEventQuery = unsafe extern "C" fn(CuEventHandle) -> CuResult;
 type CuEventSynchronize = unsafe extern "C" fn(CuEventHandle) -> CuResult;
+type CuStreamWaitEvent = unsafe extern "C" fn(CuStreamHandle, CuEventHandle, u32) -> CuResult;
 type CuModuleLoadDataEx = unsafe extern "C" fn(*mut CuModule, *const c_void, u32, *mut i32, *mut *mut c_void) -> CuResult;
 type CuModuleGetFunction = unsafe extern "C" fn(*mut CuFunction, CuModule, *const i8) -> CuResult;
 type CuModuleUnload = unsafe extern "C" fn(CuModule) -> CuResult;
@@ -1480,6 +1481,16 @@ impl DeviceSession for CudaSession {
         let synchronize: Symbol<CuEventSynchronize> =
             symbol(&self.context.library, b"cuEventSynchronize\0", "resolve_cuEventSynchronize")?;
         unsafe { check("cuEventSynchronize", synchronize(event.raw)) }
+    }
+
+    fn wait_event(&self, stream: &dyn Stream, event: &dyn Event) -> Result<(), HalError> {
+        let stream = self.stream(stream)?;
+        let event = self.event(event)?;
+        self.context.activate()?;
+        let wait: Symbol<CuStreamWaitEvent> =
+            symbol(&self.context.library, b"cuStreamWaitEvent\0", "resolve_cuStreamWaitEvent")?;
+        // flags = 0: wait for the default (compute) completion of the event
+        unsafe { check("cuStreamWaitEvent", wait(stream.raw, event.raw, 0)) }
     }
 }
 
