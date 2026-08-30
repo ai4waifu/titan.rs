@@ -20,6 +20,20 @@ impl std::fmt::Display for HalError {
 }
 impl std::error::Error for HalError {}
 
+impl HalError {
+    /// Map this HAL failure into a language-agnostic [`titan_types::TitanError`].
+    pub fn to_titan_error(&self) -> titan_types::TitanError {
+        let kind = titan_types::TitanErrorKind::from_hal_operation(self.operation);
+        titan_types::TitanError::with_detail(kind, format!("{}: {}", self.operation, self.detail))
+    }
+}
+
+impl From<HalError> for titan_types::TitanError {
+    fn from(value: HalError) -> Self {
+        value.to_titan_error()
+    }
+}
+
 /// Opaque device allocation. It carries no host-slice access contract.
 pub trait Buffer: fmt::Debug + Send + Sync {
     fn device(&self) -> DeviceId;
