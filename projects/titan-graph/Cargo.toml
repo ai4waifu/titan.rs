@@ -4,9 +4,11 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Graph optimization and execution contracts for Titan.rs"
+description = "Graph IR contract, pass registry, and diagnostics for Titan.rs"
 readme = "readme.md"
 
 [dependencies]
 titan-types.workspace = true
 titan-tensor.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true

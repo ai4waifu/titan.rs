@@ -8,6 +8,25 @@ Graph 由不可变 Node 和 Value 组成。Node 记录：`OperatorId`、输入 V
 
 Value 记录：dtype、shape expression、stride expression、layout、device placement、alias set、producer、consumer count、lifetime、gradient relation 和 storage requirement。
 
+## Core Graph IR 合同（`titan-graph`，schema = 1）
+
+第一版不可推翻的字段（实现：`projects/titan-graph`）：
+
+| 字段 | 说明 |
+|------|------|
+| `schema` | `GRAPH_SCHEMA_VERSION`；不匹配 → `DXO_IR_SCHEMA_INVALID` |
+| `inputs` / `outputs` | ValueId 列表；至少一输出 |
+| `values` | `ValueId → TensorSpec`（dtype/shape/strides/layout/alias） |
+| `nodes` | `NodeId` + operator + I/O + attrs + effects + source |
+| `constraints` | `SameDtype` / `SameShape` / `Custom` |
+| `debug` | 不进入 `semantic_hash` |
+| `semantic_hash` | FNV-1a64 over canonical JSON（排除 debug） |
+| 序列化 | debug JSON roundtrip（调试用，非生产 ExecutablePlan） |
+
+验证失败产出 Living `15` JSON（`IrDiagnostic`，码如 `DXO_IR_SHAPE_CONSTRAINT_UNSAT`）；Titan 不翻译。
+
+Pass 合同见 `PassDecl` / `PassRegistry`（name · stage · invariants · failure behavior）；`builtin_pass_registry()` 为骨架，不含执行器。
+
 ## Effect Token
 
 纯计算节点没有 effect。随机数、状态读写、通信、外部调用和同步节点携带 effect token。两个共享 effect token 的节点不能被重排或跨 stream 执行。

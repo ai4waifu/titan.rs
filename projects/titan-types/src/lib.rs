@@ -3,8 +3,10 @@
 
 use std::{collections::BTreeMap, fmt};
 
+use serde::{Deserialize, Serialize};
+
 /// A registered backend implementation.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum BackendId {
     Cpu,
     Cuda,
@@ -36,7 +38,7 @@ pub struct DeviceFingerprint {
 }
 
 /// Runtime dtype supported by the tensor and kernel protocols.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum DType {
     F32,
     F16,
@@ -46,7 +48,7 @@ pub enum DType {
 }
 
 /// Physical tensor layout.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum Layout {
     Contiguous,
     Strided,
@@ -54,13 +56,13 @@ pub enum Layout {
 }
 
 /// Canonical dynamic shape used by graph and cache protocols.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Shape(pub Vec<u64>);
 /// Canonical signed strides measured in elements.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Strides(pub Vec<i64>);
 /// Stable operator identity.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct OperatorId(pub String);
 /// Stable candidate identity.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -127,14 +129,14 @@ pub enum FallbackPolicy {
     ExplicitCpu { max_transfer_bytes: u64 },
 }
 /// Source location propagated into structured execution errors.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct SourceSpan {
     pub file: String,
     pub line: u32,
     pub column: u32,
 }
 /// Canonical operator attribute value.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum AttrValue {
     Bool(bool),
     Int(i64),
@@ -146,14 +148,14 @@ pub enum AttrValue {
 /// Ordered attribute map used for deterministic identity.
 pub type AttrMap = BTreeMap<String, AttrValue>;
 /// Alias and in-place access contract.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum AliasContract {
     NoAlias,
     MayAlias,
     MustAlias,
 }
 /// Memory effect contract for graph scheduling.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum MemoryEffect {
     Pure,
     Reads,
